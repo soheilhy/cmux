@@ -38,7 +38,7 @@ go httpS.Serve(httpL)
 m.Serve()
 ```
 
-Take a look at [other examples in the GoDoc](http://localhost:6060/pkg/github.com/soheilhy/cmux/#pkg-examples).
+Take a look at [other examples in the GoDoc](http://godoc.org/github.com/soheilhy/cmux/#pkg-examples).
 
 ## Docs
 * [GoDocs](https://godoc.org/github.com/soheilhy/cmux)
