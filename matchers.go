@@ -121,7 +121,12 @@ func hasHTTP2Preface(r io.Reader) (ok bool) {
 }
 
 func matchHTTP1Field(r io.Reader, name, value string) (matched bool) {
-	return
+	req, err := http.ReadRequest(bufio.NewReader(r))
+	if err != nil {
+		return false
+	}
+
+	return req.Header.Get(name) == value
 }
 
 func matchHTTP2Field(r io.Reader, name, value string) (matched bool) {
