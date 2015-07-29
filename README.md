@@ -24,10 +24,10 @@ httpL := m.Match(cmux.Any()) // Any means anything that is not yet matched.
 
 // Create your protocol servers.
 grpcS := grpc.NewServer()
-pb.RegisterGreeterServer(grpcs, &server{})
+grpchello.RegisterGreeterServer(grpcs, &server{})
 
 httpS := &http.Server{
-	Handler: &testHTTP1Handler{},
+	Handler: &helloHTTP1Handler{},
 }
 
 // Use the muxed listeners for your servers.
