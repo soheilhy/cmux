@@ -66,9 +66,9 @@ func Example() {
 	// We first match the connection against HTTP2 fields. If matched, the
 	// connection will be sent through the "grpcl" listener.
 	grpcl := m.Match(cmux.HTTP2HeaderField("content-type", "application/grpc"))
-	// Otherwise, we match it againts HTTP1 methods and HTTP2. If matched by
-	// any of them, it is sent through the "httpl" listener.
-	httpl := m.Match(cmux.HTTP1Fast(), cmux.HTTP2())
+	// Otherwise, we match it againts HTTP1 methods. If matched,
+	// it is sent through the "httpl" listener.
+	httpl := m.Match(cmux.HTTP1Fast())
 	// If not matched by HTTP, we assume it is an RPC connection.
 	rpcl := m.Match(cmux.Any())
 

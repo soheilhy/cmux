@@ -7,8 +7,6 @@ import (
 	"net/http"
 	"net/rpc"
 	"testing"
-
-	"github.com/bradfitz/http2"
 )
 
 const (
@@ -38,12 +36,9 @@ func (h *testHTTP1Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, testHTTP1Resp)
 }
 
-func runTestHTTPServer(l net.Listener, withHTTP2 bool) {
+func runTestHTTPServer(l net.Listener) {
 	s := &http.Server{
 		Handler: &testHTTP1Handler{},
-	}
-	if withHTTP2 {
-		http2.ConfigureServer(s, &http2.Server{})
 	}
 	s.Serve(l)
 }
@@ -110,7 +105,7 @@ func TestAny(t *testing.T) {
 	muxl := New(l)
 	httpl := muxl.Match(Any())
 
-	go runTestHTTPServer(httpl, false)
+	go runTestHTTPServer(httpl)
 	go muxl.Serve()
 
 	r, err := http.Get("http://" + addr)
@@ -133,7 +128,7 @@ func TestHTTPGoRPC(t *testing.T) {
 	httpl := muxl.Match(HTTP2(), HTTP1Fast())
 	rpcl := muxl.Match(Any())
 
-	go runTestHTTPServer(httpl, true)
+	go runTestHTTPServer(httpl)
 	go runTestRPCServer(rpcl)
 	go muxl.Serve()
 
@@ -148,7 +143,7 @@ func TestErrorHandler(t *testing.T) {
 	muxl := New(l)
 	httpl := muxl.Match(HTTP2(), HTTP1Fast())
 
-	go runTestHTTPServer(httpl, true)
+	go runTestHTTPServer(httpl)
 	go muxl.Serve()
 
 	firstErr := true
