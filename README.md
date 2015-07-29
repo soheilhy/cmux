@@ -19,8 +19,8 @@ if err != nil {
 m := cmux.New(l)
 
 // Match connections in order.
-grpcl := m.Match(cmux.HTTP2HeaderField("content-type", "application/grpc"))
-httpl := m.Match(cmux.Any()) // Any means anything that is not yet matched.
+grpcL := m.Match(cmux.HTTP2HeaderField("content-type", "application/grpc"))
+httpL := m.Match(cmux.Any()) // Any means anything that is not yet matched.
 
 // Create your protocol servers.
 grpcS := grpc.NewServer()
@@ -31,8 +31,8 @@ httpS := &http.Server{
 }
 
 // Use the muxed listeners for your servers.
-go grpcS.Serve(grpcl)
-go httpS.Serve(httpl)
+go grpcS.Serve(grpcL)
+go httpS.Serve(httpL)
 
 // Start serving!
 m.Serve()
