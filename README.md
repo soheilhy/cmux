@@ -52,7 +52,12 @@ is negligible.
 *TODO(soheil)*: Add benchmarks.
 
 ## Limitations
-*TLS*: Since `cmux` sits in between the actual listener and the mux'ed
+* *TLS*: Since `cmux` sits in between the actual listener and the mux'ed
 listeners, TLS handshake is not handled inside the actual servers.
 Because of that, when you handle HTTPS using cmux `http.Request.TLS`
 would not be set.
+
+* *Different Protocols on The Same Connection*: `cmux` matches the connection
+when it's accepted. For example, one connection can be either gRPC or REST, but
+not both. That is, we assume that a client connection is either used for gRPC
+or REST.
