@@ -103,26 +103,30 @@ func (m *cMux) Serve() error {
 			continue
 		}
 
-		muc := newMuxConn(c)
-		matched := false
-	outer:
-		for _, sl := range m.sls {
-			for _, s := range sl.ss {
-				matched = s(muc.sniffer())
-				muc.reset()
-				if matched {
-					sl.l.cch <- muc
-					break outer
-				}
+		go m.serve(c)
+	}
+}
+
+func (m *cMux) serve(c net.Conn) {
+	muc := newMuxConn(c)
+	matched := false
+outer:
+	for _, sl := range m.sls {
+		for _, s := range sl.ss {
+			matched = s(muc.sniffer())
+			muc.reset()
+			if matched {
+				sl.l.cch <- muc
+				break outer
 			}
 		}
+	}
 
-		if !matched {
-			c.Close()
-			err := ErrNotMatched{c: c}
-			if !m.handleErr(err) {
-				return err
-			}
+	if !matched {
+		c.Close()
+		err := ErrNotMatched{c: c}
+		if !m.handleErr(err) {
+			m.root.Close()
 		}
 	}
 }
