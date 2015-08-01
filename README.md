@@ -1,8 +1,8 @@
 # cmux: Connection Mux ![Travis Build Status](https://api.travis-ci.org/soheilhy/args.svg?branch=master "Travis Build Status") [![GoDoc](https://godoc.org/github.com/soheilhy/cmux?status.svg)](http://godoc.org/github.com/soheilhy/cmux)
 
 cmux is a generic Go library to multiplex connections based on
-their payload. Using cmux, you can serve gRPC, HTTP, and Go RPC
-on the same TCP listener to avoid using one port per
+their payload. Using cmux, you can serve gRPC, SSH, HTTPS, HTTP,
+and Go RPC on the same TCP listener to avoid using one port per
 protocol.
 
 ## How-To

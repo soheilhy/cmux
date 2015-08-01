@@ -1,7 +1,6 @@
 package cmux
 
 import (
-	"bytes"
 	"flag"
 	"fmt"
 	"io"
@@ -162,20 +161,17 @@ func (l muxListener) Accept() (c net.Conn, err error) {
 
 type MuxConn struct {
 	net.Conn
-	prv *bytes.Buffer
-	nxt *bytes.Buffer
+	buf buffer
 }
 
 func newMuxConn(c net.Conn) *MuxConn {
 	return &MuxConn{
 		Conn: c,
-		prv:  &bytes.Buffer{},
-		nxt:  &bytes.Buffer{},
 	}
 }
 
 func (m *MuxConn) Read(b []byte) (n int, err error) {
-	if n, err = m.prv.Read(b); err == nil {
+	if n, err = m.buf.Read(b); err == nil {
 		return
 	}
 
@@ -184,18 +180,9 @@ func (m *MuxConn) Read(b []byte) (n int, err error) {
 }
 
 func (m *MuxConn) sniffer() io.Reader {
-	return io.MultiReader(io.TeeReader(m.prv, m.nxt), io.TeeReader(m.Conn, m.nxt))
+	return io.MultiReader(&m.buf, io.TeeReader(m.Conn, &m.buf))
 }
 
 func (m *MuxConn) reset() {
-	if m.nxt.Len() == 0 {
-		return
-	}
-
-	if m.prv.Len() != 0 {
-		io.Copy(m.nxt, m.prv)
-	}
-
-	m.prv, m.nxt = m.nxt, m.prv
-	m.nxt.Reset()
+	m.buf.resetRead()
 }
