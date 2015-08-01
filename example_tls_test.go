@@ -43,7 +43,7 @@ func serveHTTPS(l net.Listener) {
 	serveHTTP1(tlsl)
 }
 
-// This is an example is serving HTTP and HTTPS on the same port.
+// This is an example for serving HTTP and HTTPS on the same port.
 func Example_bothHTTPAndHTTPS() {
 	// Create the TCP listener.
 	l, err := net.Listen("tcp", "127.0.0.1:50051")
