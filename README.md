@@ -2,8 +2,7 @@
 
 cmux is a generic Go library to multiplex connections based on
 their payload. Using cmux, you can serve gRPC, SSH, HTTPS, HTTP,
-and Go RPC on the same TCP listener to avoid using one port per
-protocol.
+Go RPC, and pretty much any other protocol on the same TCP listener.
 
 ## How-To
 Simply create your main listener, create a cmux for that listener,
