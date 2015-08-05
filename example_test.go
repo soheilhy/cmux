@@ -2,6 +2,7 @@ package cmux_test
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	"google.golang.org/grpc"
 
 	"golang.org/x/net/context"
+	"golang.org/x/net/websocket"
 
 	grpchello "github.com/grpc/grpc-common/go/helloworld"
 	"github.com/soheilhy/cmux"
@@ -24,6 +26,17 @@ func (h *exampleHTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func serveHTTP(l net.Listener) {
 	s := &http.Server{
 		Handler: &exampleHTTPHandler{},
+	}
+	s.Serve(l)
+}
+
+func EchoServer(ws *websocket.Conn) {
+	io.Copy(ws, ws)
+}
+
+func serveWS(l net.Listener) {
+	s := &http.Server{
+		Handler: websocket.Handler(EchoServer),
 	}
 	s.Serve(l)
 }
@@ -66,6 +79,9 @@ func Example() {
 	// We first match the connection against HTTP2 fields. If matched, the
 	// connection will be sent through the "grpcl" listener.
 	grpcl := m.Match(cmux.HTTP2HeaderField("content-type", "application/grpc"))
+	//Otherwise, we match it againts a websocket upgrade request.
+	wsl := m.Match(cmux.HTTP1HeaderField("Upgrade", "websocket"))
+
 	// Otherwise, we match it againts HTTP1 methods. If matched,
 	// it is sent through the "httpl" listener.
 	httpl := m.Match(cmux.HTTP1Fast())
@@ -74,6 +90,7 @@ func Example() {
 
 	// Then we used the muxed listeners.
 	go serveGRPC(grpcl)
+	go serveWS(wsl)
 	go serveHTTP(httpl)
 	go serveRPC(rpcl)
 
