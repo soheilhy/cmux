@@ -13,7 +13,7 @@ import (
 	"golang.org/x/net/context"
 	"golang.org/x/net/websocket"
 
-	grpchello "github.com/grpc/grpc-common/go/helloworld"
+	grpchello "github.com/grpc/grpc-go/examples/helloworld/helloworld"
 	"github.com/soheilhy/cmux"
 )
 
