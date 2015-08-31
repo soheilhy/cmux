@@ -168,3 +168,16 @@ func TestErrorHandler(t *testing.T) {
 		t.Error("rpc got a response")
 	}
 }
+
+type closerConn struct {
+	net.Conn
+}
+
+func (c closerConn) Close() error { return nil }
+
+func TestClosed(t *testing.T) {
+	mux := &cMux{}
+	lis := mux.Match(Any()).(muxListener)
+	close(lis.donec)
+	mux.serve(closerConn{})
+}
