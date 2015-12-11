@@ -1,6 +1,7 @@
 package cmux
 
 import (
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -36,6 +37,22 @@ func safeDial(t *testing.T, addr net.Addr) (*rpc.Client, func()) {
 			t.Fatal(err)
 		}
 	}
+}
+
+type chanListener struct {
+	net.Listener
+	connCh chan net.Conn
+}
+
+func newChanListener() *chanListener {
+	return &chanListener{connCh: make(chan net.Conn, 1)}
+}
+
+func (l *chanListener) Accept() (net.Conn, error) {
+	if c, ok := <-l.connCh; ok {
+		return c, nil
+	}
+	return nil, errors.New("use of closed network connection")
 }
 
 func testListener(t *testing.T) (net.Listener, func()) {
@@ -235,21 +252,41 @@ func TestErrorHandler(t *testing.T) {
 	}
 }
 
-type closerConn struct {
-	net.Conn
-}
-
-func (c closerConn) Close() error { return nil }
-
-func TestClosed(t *testing.T) {
+func TestClose(t *testing.T) {
 	defer leakCheck(t)()
-	mux := &cMux{}
-	lis := mux.Match(Any()).(muxListener)
-	close(lis.donec)
-	mux.serve(closerConn{})
-	_, err := lis.Accept()
-	if _, ok := err.(errListenerClosed); !ok {
-		t.Errorf("expected errListenerClosed got %v", err)
+	errCh := make(chan error)
+	defer func() {
+		select {
+		case err := <-errCh:
+			t.Fatal(err)
+		default:
+		}
+	}()
+	l := newChanListener()
+
+	c1, c2 := net.Pipe()
+
+	muxl := New(l)
+	anyl := muxl.Match(Any())
+
+	go safeServe(errCh, muxl)
+
+	l.connCh <- c1
+
+	// First connection goes through.
+	if _, err := anyl.Accept(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Second connection is sent
+	l.connCh <- c2
+
+	// Listener is closed.
+	close(l.connCh)
+
+	// Second connection goes through.
+	if _, err := anyl.Accept(); err != nil {
+		t.Fatal(err)
 	}
 }
 
