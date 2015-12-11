@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"sync"
 )
 
 // Matcher matches a connection based on its content.
@@ -81,16 +82,20 @@ func (m *cMux) Match(matchers ...Matcher) (l net.Listener) {
 	ml := muxListener{
 		Listener: m.root,
 		connc:    make(chan net.Conn, m.bufLen),
-		donec:    make(chan struct{}),
 	}
 	m.sls = append(m.sls, matchersListener{ss: matchers, l: ml})
 	return ml
 }
 
 func (m *cMux) Serve() error {
+	var mu sync.RWMutex
+
 	defer func() {
+		mu.Lock()
+		defer mu.Unlock()
+
 		for _, sl := range m.sls {
-			close(sl.l.donec)
+			close(sl.l.connc)
 		}
 	}()
 
@@ -103,35 +108,30 @@ func (m *cMux) Serve() error {
 			continue
 		}
 
-		go m.serve(c)
+		go m.serve(c, &mu)
 	}
 }
 
-func (m *cMux) serve(c net.Conn) {
+func (m *cMux) serve(c net.Conn, mu *sync.RWMutex) {
+	mu.RLock()
+	defer mu.RUnlock()
+
 	muc := newMuxConn(c)
-	matched := false
 	for _, sl := range m.sls {
 		for _, s := range sl.ss {
-			matched = s(muc.sniffer())
+			matched := s(muc.sniffer())
 			muc.reset()
 			if matched {
-				select {
-				// TODO(soheil): threre is a possiblity of having unclosed connection.
-				case sl.l.connc <- muc:
-				case <-sl.l.donec:
-					c.Close()
-				}
+				sl.l.connc <- muc
 				return
 			}
 		}
 	}
 
-	if !matched {
-		c.Close()
-		err := ErrNotMatched{c: c}
-		if !m.handleErr(err) {
-			m.root.Close()
-		}
+	c.Close()
+	err := ErrNotMatched{c: c}
+	if !m.handleErr(err) {
+		m.root.Close()
 	}
 }
 
@@ -154,7 +154,6 @@ func (m *cMux) handleErr(err error) bool {
 type muxListener struct {
 	net.Listener
 	connc chan net.Conn
-	donec chan struct{}
 }
 
 func (l muxListener) Accept() (c net.Conn, err error) {
