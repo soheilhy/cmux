@@ -169,15 +169,13 @@ func TestErrorHandler(t *testing.T) {
 	}
 }
 
-type closerConn struct {
-	net.Conn
-}
+func TestClose(t *testing.T) {
+	l, _ := testListener(t)
 
-func (c closerConn) Close() error { return nil }
+	muxl := New(l)
+	anyl := muxl.Match(Any())
 
-func TestClosed(t *testing.T) {
-	mux := &cMux{}
-	lis := mux.Match(Any()).(muxListener)
-	close(lis.donec)
-	mux.serve(closerConn{})
+	l.Close()
+	muxl.Serve()
+	anyl.Accept()
 }

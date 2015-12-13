@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"io"
 	"net"
+	"sync"
 	"testing"
 )
 
@@ -17,8 +18,6 @@ func (c *mockConn) Read(b []byte) (n int, err error) {
 }
 
 func BenchmarkCMuxConn(b *testing.B) {
-	b.StopTimer()
-
 	benchHTTPPayload := make([]byte, 4096)
 	copy(benchHTTPPayload, []byte("GET http://www.w3.org/ HTTP/1.1"))
 
@@ -33,12 +32,14 @@ func BenchmarkCMuxConn(b *testing.B) {
 		}
 	}()
 
-	b.StartTimer()
+	var mu sync.RWMutex
+
+	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
 		c := &mockConn{
 			r: bytes.NewReader(benchHTTPPayload),
 		}
-		m.serve(c)
+		m.serve(c, &mu)
 	}
 }
