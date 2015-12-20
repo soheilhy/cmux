@@ -180,4 +180,8 @@ func TestClosed(t *testing.T) {
 	lis := mux.Match(Any()).(muxListener)
 	close(lis.donec)
 	mux.serve(closerConn{})
+	_, err := lis.Accept()
+	if _, ok := err.(errListenerClosed); !ok {
+		t.Errorf("expected errListenerClosed got %v", err)
+	}
 }

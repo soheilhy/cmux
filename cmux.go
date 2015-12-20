@@ -158,11 +158,12 @@ type muxListener struct {
 }
 
 func (l muxListener) Accept() (c net.Conn, err error) {
-	c, ok := <-l.connc
-	if !ok {
+	select {
+	case c = <-l.connc:
+		return c, nil
+	case <-l.donec:
 		return nil, ErrListenerClosed
 	}
-	return c, nil
 }
 
 type MuxConn struct {
