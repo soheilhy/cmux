@@ -17,8 +17,6 @@ func (c *mockConn) Read(b []byte) (n int, err error) {
 }
 
 func BenchmarkCMuxConn(b *testing.B) {
-	b.StopTimer()
-
 	benchHTTPPayload := make([]byte, 4096)
 	copy(benchHTTPPayload, []byte("GET http://www.w3.org/ HTTP/1.1"))
 
@@ -33,7 +31,7 @@ func BenchmarkCMuxConn(b *testing.B) {
 		}
 	}()
 
-	b.StartTimer()
+	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
 		c := &mockConn{

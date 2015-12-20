@@ -109,14 +109,12 @@ func (m *cMux) Serve() error {
 
 func (m *cMux) serve(c net.Conn) {
 	muc := newMuxConn(c)
-	matched := false
 	for _, sl := range m.sls {
 		for _, s := range sl.ss {
-			matched = s(muc.sniffer())
+			matched := s(muc.sniffer())
 			muc.reset()
 			if matched {
 				select {
-				// TODO(soheil): threre is a possiblity of having unclosed connection.
 				case sl.l.connc <- muc:
 				case <-sl.l.donec:
 					c.Close()
@@ -126,12 +124,10 @@ func (m *cMux) serve(c net.Conn) {
 		}
 	}
 
-	if !matched {
-		c.Close()
-		err := ErrNotMatched{c: c}
-		if !m.handleErr(err) {
-			m.root.Close()
-		}
+	c.Close()
+	err := ErrNotMatched{c: c}
+	if !m.handleErr(err) {
+		m.root.Close()
 	}
 }
 
