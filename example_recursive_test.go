@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/rpc"
+	"strings"
 
 	"github.com/soheilhy/cmux"
 )
@@ -23,7 +24,9 @@ func recursiveServeHTTP(l net.Listener) {
 	s := &http.Server{
 		Handler: &recursiveHTTPHandler{},
 	}
-	s.Serve(l)
+	if err := s.Serve(l); err != cmux.ErrListenerClosed {
+		panic(err)
+	}
 }
 
 func tlsListener(l net.Listener) net.Listener {
@@ -52,8 +55,19 @@ func (r *RecursiveRPCRcvr) Cube(i int, j *int) error {
 
 func recursiveServeRPC(l net.Listener) {
 	s := rpc.NewServer()
-	s.Register(&RecursiveRPCRcvr{})
-	s.Accept(l)
+	if err := s.Register(&RecursiveRPCRcvr{}); err != nil {
+		panic(err)
+	}
+	for {
+		conn, err := l.Accept()
+		if err != nil {
+			if err != cmux.ErrListenerClosed {
+				panic(err)
+			}
+			return
+		}
+		go s.ServeConn(conn)
+	}
 }
 
 // This is an example for serving HTTP, HTTPS, and GoRPC/TLS on the same port.
@@ -79,11 +93,16 @@ func Example_recursiveCmux() {
 	tlsm := cmux.New(tlsl)
 	httpsl := tlsm.Match(cmux.HTTP1Fast())
 	gorpcl := tlsm.Match(cmux.Any())
-
 	go recursiveServeHTTP(httpl)
 	go recursiveServeHTTP(httpsl)
 	go recursiveServeRPC(gorpcl)
 
-	go tlsm.Serve()
-	tcpm.Serve()
+	go func() {
+		if err := tlsm.Serve(); err != cmux.ErrListenerClosed {
+			panic(err)
+		}
+	}()
+	if err := tcpm.Serve(); !strings.Contains(err.Error(), "use of closed network connection") {
+		panic(err)
+	}
 }

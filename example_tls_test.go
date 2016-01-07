@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"strings"
 
 	"github.com/soheilhy/cmux"
 )
@@ -20,7 +21,9 @@ func serveHTTP1(l net.Listener) {
 	s := &http.Server{
 		Handler: &anotherHTTPHandler{},
 	}
-	s.Serve(l)
+	if err := s.Serve(l); err != cmux.ErrListenerClosed {
+		panic(err)
+	}
 }
 
 func serveHTTPS(l net.Listener) {
@@ -65,5 +68,7 @@ func Example_bothHTTPAndHTTPS() {
 	go serveHTTP1(httpl)
 	go serveHTTPS(tlsl)
 
-	m.Serve()
+	if err := m.Serve(); !strings.Contains(err.Error(), "use of closed network connection") {
+		panic(err)
+	}
 }

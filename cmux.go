@@ -119,17 +119,17 @@ func (m *cMux) serve(c net.Conn) {
 				select {
 				case sl.l.connc <- muc:
 				case <-sl.l.donec:
-					c.Close()
+					_ = c.Close()
 				}
 				return
 			}
 		}
 	}
 
-	c.Close()
+	_ = c.Close()
 	err := ErrNotMatched{c: c}
 	if !m.handleErr(err) {
-		m.root.Close()
+		_ = m.root.Close()
 	}
 }
 
