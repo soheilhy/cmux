@@ -11,7 +11,7 @@ and then match connections:
 // Create the main listener.
 l, err := net.Listen("tcp", ":23456")
 if err != nil {
-	log.Fatal(err)
+	panic(err)
 }
 
 // Create a cmux.

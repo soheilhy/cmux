@@ -3,7 +3,6 @@ package cmux_test
 import (
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"net/http"
 	"net/rpc"
@@ -71,7 +70,7 @@ func serveGRPC(l net.Listener) {
 func Example() {
 	l, err := net.Listen("tcp", "127.0.0.1:50051")
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 
 	m := cmux.New(l)
