@@ -13,6 +13,8 @@ type Matcher func(r io.Reader) (ok bool)
 // the mux should continue serving the listener.
 type ErrorHandler func(err error) (ok bool)
 
+var _ net.Error = ErrNotMatched{}
+
 // ErrNotMatched is returned whenever a connection is not matched by any of
 // the matchers registered in the multiplexer.
 type ErrNotMatched struct {
@@ -24,8 +26,11 @@ func (e ErrNotMatched) Error() string {
 		e.c.RemoteAddr())
 }
 
+// Temporary implements the net.Error interface.
 func (e ErrNotMatched) Temporary() bool { return true }
-func (e ErrNotMatched) Timeout() bool   { return false }
+
+// Timeout implements the net.Error interface.
+func (e ErrNotMatched) Timeout() bool { return false }
 
 type errListenerClosed string
 
@@ -34,6 +39,8 @@ func (e errListenerClosed) Temporary() bool { return false }
 func (e errListenerClosed) Timeout() bool   { return false }
 
 var (
+	// ErrListenerClosed is returned from muxListener.Accept when the underlying
+	// listener is closed.
 	ErrListenerClosed = errListenerClosed("mux: listener closed")
 )
 
@@ -157,6 +164,7 @@ func (l muxListener) Accept() (c net.Conn, err error) {
 	}
 }
 
+// MuxConn wraps a net.Conn and provides transparent sniffing of connection data.
 type MuxConn struct {
 	net.Conn
 	buf buffer
