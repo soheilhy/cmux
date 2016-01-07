@@ -8,4 +8,5 @@ before_install:
   - go get -u github.com/golang/lint/golint
 
 before_script:
+  - '! gofmt -s -l . | read'
   - golint ./...
