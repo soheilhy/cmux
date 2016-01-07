@@ -144,7 +144,9 @@ func matchHTTP2Field(r io.Reader, name, value string) (matched bool) {
 
 		switch f := f.(type) {
 		case *http2.HeadersFrame:
-			hdec.Write(f.HeaderBlockFragment())
+			if _, err := hdec.Write(f.HeaderBlockFragment()); err != nil {
+				return false
+			}
 			if matched {
 				return true
 			}

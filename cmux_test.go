@@ -36,11 +36,13 @@ func (h *testHTTP1Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, testHTTP1Resp)
 }
 
-func runTestHTTPServer(l net.Listener) {
+func runTestHTTPServer(t *testing.T, l net.Listener) {
 	s := &http.Server{
 		Handler: &testHTTP1Handler{},
 	}
-	s.Serve(l)
+	if err := s.Serve(l); err != nil {
+		t.Log(err)
+	}
 }
 
 func runTestHTTP1Client(t *testing.T, addr string) {
@@ -49,7 +51,11 @@ func runTestHTTP1Client(t *testing.T, addr string) {
 		t.Fatal(err)
 	}
 
-	defer r.Body.Close()
+	defer func() {
+		if err := r.Body.Close(); err != nil {
+			t.Log(err)
+		}
+	}()
 	b, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		t.Error(err)
@@ -67,16 +73,18 @@ func (r TestRPCRcvr) Test(i int, j *int) error {
 	return nil
 }
 
-func runTestRPCServer(l net.Listener) {
+func runTestRPCServer(t *testing.T, l net.Listener) {
 	s := rpc.NewServer()
-	s.Register(TestRPCRcvr{})
-
+	if err := s.Register(TestRPCRcvr{}); err != nil {
+		t.Fatal(err)
+	}
 	for {
 		c, err := l.Accept()
 		if err != nil {
+			t.Log(err)
 			return
 		}
-		s.ServeConn(c)
+		go s.ServeConn(c)
 	}
 }
 
@@ -100,21 +108,36 @@ func runTestRPCClient(t *testing.T, addr string) {
 
 func TestAny(t *testing.T) {
 	l, addr := testListener(t)
-	defer l.Close()
+	defer func() {
+		if err := l.Close(); err != nil {
+			t.Log(err)
+		}
+	}()
 
 	muxl := New(l)
 	httpl := muxl.Match(Any())
 
-	go runTestHTTPServer(httpl)
-	go muxl.Serve()
+	go runTestHTTPServer(t, httpl)
+	go func() {
+		if err := muxl.Serve(); err != nil {
+			t.Log(err)
+		}
+	}()
 
 	r, err := http.Get("http://" + addr)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	defer r.Body.Close()
+	defer func() {
+		if err := r.Body.Close(); err != nil {
+			t.Log(err)
+		}
+	}()
 	b, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		t.Error(err)
+	}
 	if string(b) != testHTTP1Resp {
 		t.Errorf("invalid response: want=%s got=%s", testHTTP1Resp, b)
 	}
@@ -122,15 +145,23 @@ func TestAny(t *testing.T) {
 
 func TestHTTPGoRPC(t *testing.T) {
 	l, addr := testListener(t)
-	defer l.Close()
+	defer func() {
+		if err := l.Close(); err != nil {
+			t.Log(err)
+		}
+	}()
 
 	muxl := New(l)
 	httpl := muxl.Match(HTTP2(), HTTP1Fast())
 	rpcl := muxl.Match(Any())
 
-	go runTestHTTPServer(httpl)
-	go runTestRPCServer(rpcl)
-	go muxl.Serve()
+	go runTestHTTPServer(t, httpl)
+	go runTestRPCServer(t, rpcl)
+	go func() {
+		if err := muxl.Serve(); err != nil {
+			t.Log(err)
+		}
+	}()
 
 	runTestHTTP1Client(t, addr)
 	runTestRPCClient(t, addr)
@@ -138,13 +169,21 @@ func TestHTTPGoRPC(t *testing.T) {
 
 func TestErrorHandler(t *testing.T) {
 	l, addr := testListener(t)
-	defer l.Close()
+	defer func() {
+		if err := l.Close(); err != nil {
+			t.Log(err)
+		}
+	}()
 
 	muxl := New(l)
 	httpl := muxl.Match(HTTP2(), HTTP1Fast())
 
-	go runTestHTTPServer(httpl)
-	go muxl.Serve()
+	go runTestHTTPServer(t, httpl)
+	go func() {
+		if err := muxl.Serve(); err != nil {
+			t.Log(err)
+		}
+	}()
 
 	firstErr := true
 	muxl.HandleError(func(err error) bool {
