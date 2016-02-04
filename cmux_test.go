@@ -46,9 +46,11 @@ func runTestHTTPServer(t *testing.T, l net.Listener) {
 }
 
 func runTestHTTP1Client(t *testing.T, addr string) {
-	r, err := http.Get("http://" + addr)
-	if err != nil {
+	var r *http.Response
+	if resp, err := http.Get("http://" + addr); err != nil {
 		t.Fatal(err)
+	} else {
+		r = resp
 	}
 
 	defer func() {
@@ -124,9 +126,11 @@ func TestAny(t *testing.T) {
 		}
 	}()
 
-	r, err := http.Get("http://" + addr)
-	if err != nil {
+	var r *http.Response
+	if resp, err := http.Get("http://" + addr); err != nil {
 		t.Fatal(err)
+	} else {
+		r = resp
 	}
 
 	defer func() {
@@ -135,6 +139,10 @@ func TestAny(t *testing.T) {
 		}
 	}()
 	b, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		t.Error(err)
+	}
+
 	if string(b) != testHTTP1Resp {
 		t.Errorf("invalid response: want=%s got=%s", testHTTP1Resp, b)
 	}
