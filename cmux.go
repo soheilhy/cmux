@@ -1,7 +1,6 @@
 package cmux
 
 import (
-	"flag"
 	"fmt"
 	"io"
 	"net"
@@ -40,10 +39,6 @@ var (
 
 // New instantiates a new connection multiplexer.
 func New(l net.Listener) CMux {
-	if !flag.Parsed() {
-		flag.Parse()
-	}
-
 	return &cMux{
 		root:   l,
 		bufLen: 1024,
