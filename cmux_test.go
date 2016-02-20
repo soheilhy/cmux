@@ -14,20 +14,16 @@ const (
 	rpcVal        = 1234
 )
 
-var testPort = 5125
-
-func testAddr() string {
-	testPort++
-	return fmt.Sprintf("127.0.0.1:%d", testPort)
-}
-
-func testListener(t *testing.T) (net.Listener, string) {
-	addr := testAddr()
-	l, err := net.Listen("tcp", addr)
+func testListener(t *testing.T) (net.Listener, func()) {
+	l, err := net.Listen("tcp", ":0")
 	if err != nil {
 		t.Fatal(err)
 	}
-	return l, addr
+	return l, func() {
+		if err := l.Close(); err != nil {
+			t.Error(err)
+		}
+	}
 }
 
 type testHTTP1Handler struct{}
@@ -40,14 +36,14 @@ func runTestHTTPServer(t *testing.T, l net.Listener) {
 	s := &http.Server{
 		Handler: &testHTTP1Handler{},
 	}
-	if err := s.Serve(l); err != nil {
+	if err := s.Serve(l); err != nil && err != ErrListenerClosed {
 		t.Log(err)
 	}
 }
 
-func runTestHTTP1Client(t *testing.T, addr string) {
+func runTestHTTP1Client(t *testing.T, addr net.Addr) {
 	var r *http.Response
-	if resp, err := http.Get("http://" + addr); err != nil {
+	if resp, err := http.Get("http://" + addr.String()); err != nil {
 		t.Fatal(err)
 	} else {
 		r = resp
@@ -90,8 +86,8 @@ func runTestRPCServer(t *testing.T, l net.Listener) {
 	}
 }
 
-func runTestRPCClient(t *testing.T, addr string) {
-	c, err := rpc.Dial("tcp", addr)
+func runTestRPCClient(t *testing.T, addr net.Addr) {
+	c, err := rpc.Dial(addr.Network(), addr.String())
 	if err != nil {
 		t.Error(err)
 		return
@@ -109,12 +105,8 @@ func runTestRPCClient(t *testing.T, addr string) {
 }
 
 func TestAny(t *testing.T) {
-	l, addr := testListener(t)
-	defer func() {
-		if err := l.Close(); err != nil {
-			t.Log(err)
-		}
-	}()
+	l, cleanup := testListener(t)
+	defer cleanup()
 
 	muxl := New(l)
 	httpl := muxl.Match(Any())
@@ -127,7 +119,7 @@ func TestAny(t *testing.T) {
 	}()
 
 	var r *http.Response
-	if resp, err := http.Get("http://" + addr); err != nil {
+	if resp, err := http.Get("http://" + l.Addr().String()); err != nil {
 		t.Fatal(err)
 	} else {
 		r = resp
@@ -149,12 +141,8 @@ func TestAny(t *testing.T) {
 }
 
 func TestHTTPGoRPC(t *testing.T) {
-	l, addr := testListener(t)
-	defer func() {
-		if err := l.Close(); err != nil {
-			t.Log(err)
-		}
-	}()
+	l, cleanup := testListener(t)
+	defer cleanup()
 
 	muxl := New(l)
 	httpl := muxl.Match(HTTP2(), HTTP1Fast())
@@ -168,17 +156,13 @@ func TestHTTPGoRPC(t *testing.T) {
 		}
 	}()
 
-	runTestHTTP1Client(t, addr)
-	runTestRPCClient(t, addr)
+	runTestHTTP1Client(t, l.Addr())
+	runTestRPCClient(t, l.Addr())
 }
 
 func TestErrorHandler(t *testing.T) {
-	l, addr := testListener(t)
-	defer func() {
-		if err := l.Close(); err != nil {
-			t.Log(err)
-		}
-	}()
+	l, cleanup := testListener(t)
+	defer cleanup()
 
 	muxl := New(l)
 	httpl := muxl.Match(HTTP2(), HTTP1Fast())
@@ -202,7 +186,8 @@ func TestErrorHandler(t *testing.T) {
 		return true
 	})
 
-	c, err := rpc.Dial("tcp", addr)
+	addr := l.Addr()
+	c, err := rpc.Dial(addr.Network(), addr.String())
 	if err != nil {
 		t.Fatal(err)
 	}
