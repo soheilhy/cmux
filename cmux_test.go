@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -212,15 +213,13 @@ func TestErrorHandler(t *testing.T) {
 	go runTestHTTPServer(errCh, httpl)
 	go safeServe(errCh, muxl)
 
-	firstErr := true
+	var errCount uint32
 	muxl.HandleError(func(err error) bool {
-		if !firstErr {
-			return true
+		if atomic.AddUint32(&errCount, 1) == 1 {
+			if _, ok := err.(ErrNotMatched); !ok {
+				t.Errorf("unexpected error: %v", err)
+			}
 		}
-		if _, ok := err.(ErrNotMatched); !ok {
-			t.Errorf("unexpected error: %v", err)
-		}
-		firstErr = false
 		return true
 	})
 
@@ -229,7 +228,11 @@ func TestErrorHandler(t *testing.T) {
 
 	var num int
 	if err := c.Call("TestRPCRcvr.Test", rpcVal, &num); err == nil {
-		t.Error("rpc got a response")
+		// The connection is simply closed.
+		t.Errorf("unexpected rpc success after %d errors", atomic.LoadUint32(&errCount))
+	}
+	if atomic.LoadUint32(&errCount) == 0 {
+		t.Errorf("expected at least 1 error(s), got none")
 	}
 }
 

@@ -6,6 +6,8 @@ go:
   - 1.5
   - 1.6
 
+gobuild_args: -race
+
 before_install:
   - go get -u github.com/golang/lint/golint
   - if [[ $TRAVIS_GO_VERSION == 1.5* ]]; then go get -u github.com/kisielk/errcheck; fi
