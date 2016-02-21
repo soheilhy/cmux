@@ -116,22 +116,7 @@ func TestAny(t *testing.T) {
 		}
 	}()
 
-	r, err := http.Get("http://" + l.Addr().String())
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() {
-		if err := r.Body.Close(); err != nil {
-			t.Log(err)
-		}
-	}()
-	b, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		t.Error(err)
-	}
-	if string(b) != testHTTP1Resp {
-		t.Errorf("invalid response: want=%s got=%s", testHTTP1Resp, b)
-	}
+	runTestHTTP1Client(t, l.Addr())
 }
 
 func TestHTTPGoRPC(t *testing.T) {
