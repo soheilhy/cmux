@@ -1,7 +1,9 @@
 package cmux
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -36,6 +38,22 @@ func safeDial(t *testing.T, addr net.Addr) (*rpc.Client, func()) {
 			t.Fatal(err)
 		}
 	}
+}
+
+type chanListener struct {
+	net.Listener
+	connCh chan net.Conn
+}
+
+func newChanListener() *chanListener {
+	return &chanListener{connCh: make(chan net.Conn, 1)}
+}
+
+func (l *chanListener) Accept() (net.Conn, error) {
+	if c, ok := <-l.connCh; ok {
+		return c, nil
+	}
+	return nil, errors.New("use of closed network connection")
 }
 
 func testListener(t *testing.T) (net.Listener, func()) {
@@ -144,6 +162,48 @@ func runTestRPCClient(t *testing.T, addr net.Addr) {
 
 	if num != rpcVal {
 		t.Errorf("wrong rpc response: want=%d got=%v", rpcVal, num)
+	}
+}
+
+func TestRead(t *testing.T) {
+	defer leakCheck(t)()
+	errCh := make(chan error)
+	defer func() {
+		select {
+		case err := <-errCh:
+			t.Fatal(err)
+		default:
+		}
+	}()
+	const payload = "hello world\r\n"
+	const mult = 2
+
+	writer, reader := net.Pipe()
+	go func() {
+		if _, err := io.WriteString(writer, strings.Repeat(payload, mult)); err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	l := newChanListener()
+	defer close(l.connCh)
+	l.connCh <- reader
+	muxl := New(l)
+	// Register a bogus matcher to force reading from the conn.
+	muxl.Match(HTTP2())
+	anyl := muxl.Match(Any())
+	go safeServe(errCh, muxl)
+	muxedConn, err := anyl.Accept()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var b [mult * len(payload)]byte
+	n, err := muxedConn.Read(b[:])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e := len(b); n != e {
+		t.Errorf("expected to read %d bytes, but read %d bytes", e, n)
 	}
 }
 
