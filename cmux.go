@@ -38,11 +38,9 @@ func (e errListenerClosed) Error() string   { return string(e) }
 func (e errListenerClosed) Temporary() bool { return false }
 func (e errListenerClosed) Timeout() bool   { return false }
 
-var (
-	// ErrListenerClosed is returned from muxListener.Accept when the underlying
-	// listener is closed.
-	ErrListenerClosed = errListenerClosed("mux: listener closed")
-)
+// ErrListenerClosed is returned from muxListener.Accept when the underlying
+// listener is closed.
+var ErrListenerClosed = errListenerClosed("mux: listener closed")
 
 // New instantiates a new connection multiplexer.
 func New(l net.Listener) CMux {

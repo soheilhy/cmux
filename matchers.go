@@ -46,9 +46,7 @@ func HTTP1Fast(extMethods ...string) Matcher {
 	return PrefixMatcher(append(defaultHTTPMethods, extMethods...)...)
 }
 
-const (
-	maxHTTPRead = 4096
-)
+const maxHTTPRead = 4096
 
 // HTTP1 parses the first line or upto 4096 bytes of the request to see if
 // the conection contains an HTTP request.
@@ -81,9 +79,7 @@ func parseRequestLine(line string) (method, uri, proto string, ok bool) {
 	return line[:s1], line[s1+1 : s2], line[s2+1:], true
 }
 
-var (
-	http2Preface = []byte(http2.ClientPreface)
-)
+var http2Preface = []byte(http2.ClientPreface)
 
 // HTTP2 parses the frame header of the first frame to detect whether the
 // connection is an HTTP2 connection.
