@@ -7,11 +7,13 @@ import (
 )
 
 // Matcher matches a connection based on its content.
-type Matcher func(r io.Reader) (ok bool)
+type Matcher func(io.Reader) bool
 
 // ErrorHandler handles an error and returns whether
 // the mux should continue serving the listener.
-type ErrorHandler func(err error) (ok bool)
+type ErrorHandler func(error) bool
+
+var _ net.Error = ErrNotMatched{}
 
 // ErrNotMatched is returned whenever a connection is not matched by any of
 // the matchers registered in the multiplexer.
@@ -24,8 +26,11 @@ func (e ErrNotMatched) Error() string {
 		e.c.RemoteAddr())
 }
 
+// Temporary implements the net.Error interface.
 func (e ErrNotMatched) Temporary() bool { return true }
-func (e ErrNotMatched) Timeout() bool   { return false }
+
+// Timeout implements the net.Error interface.
+func (e ErrNotMatched) Timeout() bool { return false }
 
 type errListenerClosed string
 
@@ -34,6 +39,8 @@ func (e errListenerClosed) Temporary() bool { return false }
 func (e errListenerClosed) Timeout() bool   { return false }
 
 var (
+	// ErrListenerClosed is returned from muxListener.Accept when the underlying
+	// listener is closed.
 	ErrListenerClosed = errListenerClosed("mux: listener closed")
 )
 
@@ -42,7 +49,7 @@ func New(l net.Listener) CMux {
 	return &cMux{
 		root:   l,
 		bufLen: 1024,
-		errh:   func(err error) bool { return true },
+		errh:   func(_ error) bool { return true },
 	}
 }
 
@@ -52,12 +59,12 @@ type CMux interface {
 	// the connections matched by at least one of the matcher.
 	//
 	// The order used to call Match determines the priority of matchers.
-	Match(matchers ...Matcher) net.Listener
+	Match(...Matcher) net.Listener
 	// Serve starts multiplexing the listener. Serve blocks and perhaps
 	// should be invoked concurrently within a go routine.
 	Serve() error
 	// HandleError registers an error handler that handles listener errors.
-	HandleError(h ErrorHandler)
+	HandleError(ErrorHandler)
 }
 
 type matchersListener struct {
@@ -72,7 +79,7 @@ type cMux struct {
 	sls    []matchersListener
 }
 
-func (m *cMux) Match(matchers ...Matcher) (l net.Listener) {
+func (m *cMux) Match(matchers ...Matcher) net.Listener {
 	ml := muxListener{
 		Listener: m.root,
 		connc:    make(chan net.Conn, m.bufLen),
@@ -112,17 +119,17 @@ func (m *cMux) serve(c net.Conn) {
 				select {
 				case sl.l.connc <- muc:
 				case <-sl.l.donec:
-					c.Close()
+					_ = c.Close()
 				}
 				return
 			}
 		}
 	}
 
-	c.Close()
+	_ = c.Close()
 	err := ErrNotMatched{c: c}
 	if !m.handleErr(err) {
-		m.root.Close()
+		_ = m.root.Close()
 	}
 }
 
@@ -148,15 +155,16 @@ type muxListener struct {
 	donec chan struct{}
 }
 
-func (l muxListener) Accept() (c net.Conn, err error) {
+func (l muxListener) Accept() (net.Conn, error) {
 	select {
-	case c = <-l.connc:
+	case c := <-l.connc:
 		return c, nil
 	case <-l.donec:
 		return nil, ErrListenerClosed
 	}
 }
 
+// MuxConn wraps a net.Conn and provides transparent sniffing of connection data.
 type MuxConn struct {
 	net.Conn
 	buf buffer

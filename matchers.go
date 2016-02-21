@@ -21,9 +21,7 @@ func Any() Matcher {
 // starts with any of the strings in strs.
 func PrefixMatcher(strs ...string) Matcher {
 	pt := newPatriciaTreeString(strs...)
-	return func(r io.Reader) bool {
-		return pt.matchPrefix(r)
-	}
+	return pt.matchPrefix
 }
 
 var defaultHTTPMethods = []string{
@@ -88,9 +86,7 @@ var (
 // HTTP2 parses the frame header of the first frame to detect whether the
 // connection is an HTTP2 connection.
 func HTTP2() Matcher {
-	return func(r io.Reader) bool {
-		return hasHTTP2Preface(r)
-	}
+	return hasHTTP2Preface
 }
 
 // HTTP1HeaderField returns a matcher matching the header fields of the first
@@ -109,7 +105,7 @@ func HTTP2HeaderField(name, value string) Matcher {
 	}
 }
 
-func hasHTTP2Preface(r io.Reader) (ok bool) {
+func hasHTTP2Preface(r io.Reader) bool {
 	b := make([]byte, len(http2Preface))
 	n, err := r.Read(b)
 	if err != nil {
@@ -148,7 +144,9 @@ func matchHTTP2Field(r io.Reader, name, value string) (matched bool) {
 
 		switch f := f.(type) {
 		case *http2.HeadersFrame:
-			hdec.Write(f.HeaderBlockFragment())
+			if _, err := hdec.Write(f.HeaderBlockFragment()); err != nil {
+				return false
+			}
 			if matched {
 				return true
 			}

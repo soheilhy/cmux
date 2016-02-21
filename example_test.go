@@ -3,10 +3,10 @@ package cmux_test
 import (
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"net/http"
 	"net/rpc"
+	"strings"
 
 	"google.golang.org/grpc"
 
@@ -27,18 +27,24 @@ func serveHTTP(l net.Listener) {
 	s := &http.Server{
 		Handler: &exampleHTTPHandler{},
 	}
-	s.Serve(l)
+	if err := s.Serve(l); err != cmux.ErrListenerClosed {
+		panic(err)
+	}
 }
 
 func EchoServer(ws *websocket.Conn) {
-	io.Copy(ws, ws)
+	if _, err := io.Copy(ws, ws); err != nil {
+		panic(err)
+	}
 }
 
 func serveWS(l net.Listener) {
 	s := &http.Server{
 		Handler: websocket.Handler(EchoServer),
 	}
-	s.Serve(l)
+	if err := s.Serve(l); err != cmux.ErrListenerClosed {
+		panic(err)
+	}
 }
 
 type ExampleRPCRcvr struct{}
@@ -50,8 +56,19 @@ func (r *ExampleRPCRcvr) Cube(i int, j *int) error {
 
 func serveRPC(l net.Listener) {
 	s := rpc.NewServer()
-	s.Register(&ExampleRPCRcvr{})
-	s.Accept(l)
+	if err := s.Register(&ExampleRPCRcvr{}); err != nil {
+		panic(err)
+	}
+	for {
+		conn, err := l.Accept()
+		if err != nil {
+			if err != cmux.ErrListenerClosed {
+				panic(err)
+			}
+			return
+		}
+		go s.ServeConn(conn)
+	}
 }
 
 type grpcServer struct{}
@@ -65,13 +82,15 @@ func (s *grpcServer) SayHello(ctx context.Context, in *grpchello.HelloRequest) (
 func serveGRPC(l net.Listener) {
 	grpcs := grpc.NewServer()
 	grpchello.RegisterGreeterServer(grpcs, &grpcServer{})
-	grpcs.Serve(l)
+	if err := grpcs.Serve(l); err != cmux.ErrListenerClosed {
+		panic(err)
+	}
 }
 
 func Example() {
 	l, err := net.Listen("tcp", "127.0.0.1:50051")
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 
 	m := cmux.New(l)
@@ -94,5 +113,7 @@ func Example() {
 	go serveHTTP(httpl)
 	go serveRPC(rpcl)
 
-	m.Serve()
+	if err := m.Serve(); !strings.Contains(err.Error(), "use of closed network connection") {
+		panic(err)
+	}
 }

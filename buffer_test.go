@@ -62,7 +62,7 @@ func TestBufferOffset(t *testing.T) {
 			t.Fatal(err)
 		}
 		if n != 2 {
-			t.Fatal("cannot read the bytes: want=%d got=%d", 2, n)
+			t.Fatalf("cannot read the bytes: want=%d got=%d", 2, n)
 		}
 		if !bytes.Equal(readBytes, writeBytes[i*2:i*2+2]) {
 			t.Fatalf("different bytes read: want=%s got=%s",

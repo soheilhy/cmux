@@ -4,9 +4,9 @@ import (
 	"crypto/rand"
 	"crypto/tls"
 	"fmt"
-	"log"
 	"net"
 	"net/http"
+	"strings"
 
 	"github.com/soheilhy/cmux"
 )
@@ -21,14 +21,16 @@ func serveHTTP1(l net.Listener) {
 	s := &http.Server{
 		Handler: &anotherHTTPHandler{},
 	}
-	s.Serve(l)
+	if err := s.Serve(l); err != cmux.ErrListenerClosed {
+		panic(err)
+	}
 }
 
 func serveHTTPS(l net.Listener) {
 	// Load certificates.
 	certificate, err := tls.LoadX509KeyPair("cert.pem", "key.pem")
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 
 	config := &tls.Config{
@@ -48,7 +50,7 @@ func Example_bothHTTPAndHTTPS() {
 	// Create the TCP listener.
 	l, err := net.Listen("tcp", "127.0.0.1:50051")
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 
 	// Create a mux.
@@ -66,5 +68,7 @@ func Example_bothHTTPAndHTTPS() {
 	go serveHTTP1(httpl)
 	go serveHTTPS(tlsl)
 
-	m.Serve()
+	if err := m.Serve(); !strings.Contains(err.Error(), "use of closed network connection") {
+		panic(err)
+	}
 }
