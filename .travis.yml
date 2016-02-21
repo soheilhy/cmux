@@ -19,3 +19,4 @@ before_script:
   - echo $TRAVIS_GO_VERSION
   - if [[ $TRAVIS_GO_VERSION == 1.5* ]]; then errcheck ./...; fi
   - go vet .
+  - go tool vet --shadow .
