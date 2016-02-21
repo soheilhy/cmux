@@ -2,7 +2,6 @@ package cmux
 
 import (
 	"bufio"
-	"bytes"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -77,8 +76,6 @@ func parseRequestLine(line string) (method, uri, proto string, ok bool) {
 	return line[:s1], line[s1+1 : s2], line[s2+1:], true
 }
 
-var http2Preface = []byte(http2.ClientPreface)
-
 // HTTP2 parses the frame header of the first frame to detect whether the
 // connection is an HTTP2 connection.
 func HTTP2() Matcher {
@@ -102,14 +99,12 @@ func HTTP2HeaderField(name, value string) Matcher {
 }
 
 func hasHTTP2Preface(r io.Reader) bool {
-	b := make([]byte, len(http2Preface))
-	n, err := r.Read(b)
-	if err != nil {
+	var b [len(http2.ClientPreface)]byte
+	if _, err := io.ReadFull(r, b[:]); err != nil {
 		return false
 	}
 
-	b = b[:n]
-	return bytes.Equal(b, http2Preface)
+	return string(b[:]) == http2.ClientPreface
 }
 
 func matchHTTP1Field(r io.Reader, name, value string) (matched bool) {

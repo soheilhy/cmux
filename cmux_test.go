@@ -15,6 +15,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"golang.org/x/net/http2"
 )
 
 const (
@@ -227,6 +229,51 @@ func TestAny(t *testing.T) {
 	go safeServe(errCh, muxl)
 
 	runTestHTTP1Client(t, l.Addr())
+}
+
+func TestHTTP2(t *testing.T) {
+	defer leakCheck(t)()
+	errCh := make(chan error)
+	defer func() {
+		select {
+		case err := <-errCh:
+			t.Fatal(err)
+		default:
+		}
+	}()
+	writer, reader := net.Pipe()
+	go func() {
+		if _, err := io.WriteString(writer, http2.ClientPreface); err != nil {
+			t.Fatal(err)
+		}
+		if err := writer.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	l := newChanListener()
+	l.connCh <- reader
+	muxl := New(l)
+	// Register a bogus matcher that only reads one byte.
+	muxl.Match(func(r io.Reader) bool {
+		var b [1]byte
+		_, _ = r.Read(b[:])
+		return false
+	})
+	h2l := muxl.Match(HTTP2())
+	go safeServe(errCh, muxl)
+	close(l.connCh)
+	if muxedConn, err := h2l.Accept(); err != nil {
+		t.Fatal(err)
+	} else {
+		var b [len(http2.ClientPreface)]byte
+		if _, err := muxedConn.Read(b[:]); err != io.EOF {
+			t.Fatal(err)
+		}
+		if string(b[:]) != http2.ClientPreface {
+			t.Errorf("got unexpected read %s, expected %s", b, http2.ClientPreface)
+		}
+	}
 }
 
 func TestHTTPGoRPC(t *testing.T) {
