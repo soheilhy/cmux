@@ -31,7 +31,7 @@ func tlsListener(l net.Listener) net.Listener {
 	// Load certificates.
 	certificate, err := tls.LoadX509KeyPair("cert.pem", "key.pem")
 	if err != nil {
-		log.Fatal(err)
+		log.Panic(err)
 	}
 
 	config := &tls.Config{
@@ -62,7 +62,7 @@ func Example_recursiveCmux() {
 	// Create the TCP listener.
 	l, err := net.Listen("tcp", "127.0.0.1:50051")
 	if err != nil {
-		log.Fatal(err)
+		log.Panic(err)
 	}
 
 	// Create a mux.

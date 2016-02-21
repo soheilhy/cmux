@@ -71,7 +71,7 @@ func serveGRPC(l net.Listener) {
 func Example() {
 	l, err := net.Listen("tcp", "127.0.0.1:50051")
 	if err != nil {
-		log.Fatal(err)
+		log.Panic(err)
 	}
 
 	m := cmux.New(l)
