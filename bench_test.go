@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"io"
 	"net"
+	"sync"
 	"testing"
 )
 
@@ -31,12 +32,15 @@ func BenchmarkCMuxConn(b *testing.B) {
 		}
 	}()
 
-	b.ResetTimer()
+	donec := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(b.N)
 
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		c := &mockConn{
 			r: bytes.NewReader(benchHTTPPayload),
 		}
-		m.serve(c)
+		m.serve(c, donec, &wg)
 	}
 }

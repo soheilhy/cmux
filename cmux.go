@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"sync"
 )
 
 // Matcher matches a connection based on its content.
@@ -48,6 +49,7 @@ func New(l net.Listener) CMux {
 		root:   l,
 		bufLen: 1024,
 		errh:   func(_ error) bool { return true },
+		donec:  make(chan struct{}),
 	}
 }
 
@@ -74,6 +76,7 @@ type cMux struct {
 	root   net.Listener
 	bufLen int
 	errh   ErrorHandler
+	donec  chan struct{}
 	sls    []matchersListener
 }
 
@@ -81,16 +84,20 @@ func (m *cMux) Match(matchers ...Matcher) net.Listener {
 	ml := muxListener{
 		Listener: m.root,
 		connc:    make(chan net.Conn, m.bufLen),
-		donec:    make(chan struct{}),
 	}
 	m.sls = append(m.sls, matchersListener{ss: matchers, l: ml})
 	return ml
 }
 
 func (m *cMux) Serve() error {
+	var wg sync.WaitGroup
+
 	defer func() {
+		close(m.donec)
+		wg.Wait()
+
 		for _, sl := range m.sls {
-			close(sl.l.donec)
+			close(sl.l.connc)
 		}
 	}()
 
@@ -103,11 +110,14 @@ func (m *cMux) Serve() error {
 			continue
 		}
 
-		go m.serve(c)
+		wg.Add(1)
+		go m.serve(c, m.donec, &wg)
 	}
 }
 
-func (m *cMux) serve(c net.Conn) {
+func (m *cMux) serve(c net.Conn, donec <-chan struct{}, wg *sync.WaitGroup) {
+	defer wg.Done()
+
 	muc := newMuxConn(c)
 	for _, sl := range m.sls {
 		for _, s := range sl.ss {
@@ -116,8 +126,12 @@ func (m *cMux) serve(c net.Conn) {
 			if matched {
 				select {
 				case sl.l.connc <- muc:
-				case <-sl.l.donec:
-					_ = c.Close()
+				default:
+					select {
+					case <-donec:
+						_ = c.Close()
+					default:
+					}
 				}
 				return
 			}
@@ -150,16 +164,14 @@ func (m *cMux) handleErr(err error) bool {
 type muxListener struct {
 	net.Listener
 	connc chan net.Conn
-	donec chan struct{}
 }
 
 func (l muxListener) Accept() (net.Conn, error) {
-	select {
-	case c := <-l.connc:
-		return c, nil
-	case <-l.donec:
+	c, ok := <-l.connc
+	if !ok {
 		return nil, ErrListenerClosed
 	}
+	return c, nil
 }
 
 // MuxConn wraps a net.Conn and provides transparent sniffing of connection data.
