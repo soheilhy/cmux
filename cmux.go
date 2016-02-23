@@ -45,11 +45,16 @@ var ErrListenerClosed = errListenerClosed("mux: listener closed")
 
 // New instantiates a new connection multiplexer.
 func New(l net.Listener) CMux {
+	return NewSize(l, 1024)
+}
+
+// NewSize instantiates a new connection multiplexer which buffers up to size
+// connections in its child listeners.
+func NewSize(l net.Listener, size int) CMux {
 	return &cMux{
 		root:   l,
-		bufLen: 1024,
+		bufLen: size,
 		errh:   func(_ error) bool { return true },
-		donec:  make(chan struct{}),
 	}
 }
 
@@ -76,7 +81,6 @@ type cMux struct {
 	root   net.Listener
 	bufLen int
 	errh   ErrorHandler
-	donec  chan struct{}
 	sls    []matchersListener
 }
 
@@ -93,7 +97,6 @@ func (m *cMux) Serve() error {
 	var wg sync.WaitGroup
 
 	defer func() {
-		close(m.donec)
 		wg.Wait()
 
 		for _, sl := range m.sls {
@@ -111,11 +114,11 @@ func (m *cMux) Serve() error {
 		}
 
 		wg.Add(1)
-		go m.serve(c, m.donec, &wg)
+		go m.serve(c, &wg)
 	}
 }
 
-func (m *cMux) serve(c net.Conn, donec <-chan struct{}, wg *sync.WaitGroup) {
+func (m *cMux) serve(c net.Conn, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	muc := newMuxConn(c)
@@ -124,15 +127,7 @@ func (m *cMux) serve(c net.Conn, donec <-chan struct{}, wg *sync.WaitGroup) {
 			matched := s(muc.sniffer())
 			muc.reset()
 			if matched {
-				select {
-				case sl.l.connc <- muc:
-				default:
-					select {
-					case <-donec:
-						_ = c.Close()
-					default:
-					}
-				}
+				sl.l.connc <- muc
 				return
 			}
 		}
