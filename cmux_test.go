@@ -227,12 +227,11 @@ func TestErrorHandler(t *testing.T) {
 	defer cleanup()
 
 	var num int
-	if err := c.Call("TestRPCRcvr.Test", rpcVal, &num); err == nil {
-		// The connection is simply closed.
-		t.Errorf("unexpected rpc success after %d errors", atomic.LoadUint32(&errCount))
-	}
-	if atomic.LoadUint32(&errCount) == 0 {
-		t.Errorf("expected at least 1 error(s), got none")
+	for atomic.LoadUint32(&errCount) == 0 {
+		if err := c.Call("TestRPCRcvr.Test", rpcVal, &num); err == nil {
+			// The connection is simply closed.
+			t.Errorf("unexpected rpc success after %d errors", atomic.LoadUint32(&errCount))
+		}
 	}
 }
 
