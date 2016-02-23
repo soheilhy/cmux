@@ -354,27 +354,47 @@ func TestClose(t *testing.T) {
 	}()
 	l := newChanListener()
 
-	c1, c2 := net.Pipe()
-
-	muxl := New(l)
+	muxl := NewSize(l, 0)
 	anyl := muxl.Match(Any())
+
+	defer func() {
+		// Listener is closed.
+		close(l.connCh)
+
+		// Root listener is closed now.
+		if _, err := anyl.Accept(); err != ErrListenerClosed {
+			t.Fatal(err)
+		}
+	}()
 
 	go safeServe(errCh, muxl)
 
+	c1, c2 := net.Pipe()
+
 	l.connCh <- c1
 
-	// First connection goes through.
+	// Simulate the child listener being temporarily blocked. The connection
+	// multiplexer must be unbuffered (size=0). Before the fix, this would cause
+	// connections to be lost.
+	time.Sleep(50 * time.Millisecond)
+
+	go func() {
+		// Simulate the child listener being temporarily blocked. The connection
+		// multiplexer must be unbuffered (size=0). Before the fix, this would cause
+		// connections to be lost.
+		time.Sleep(50 * time.Millisecond)
+
+		l.connCh <- c2
+	}()
+
+	// First connection goes through. Before the fix, c1 would be lost while we
+	// were temporarily blocked, so this consumed c2.
 	if _, err := anyl.Accept(); err != nil {
 		t.Fatal(err)
 	}
 
-	// Second connection is sent
-	l.connCh <- c2
-
-	// Listener is closed.
-	close(l.connCh)
-
-	// Second connection goes through.
+	// Second connection goes through. Before the fix, c2 would be consumed above, so
+	// this would block indefinitely.
 	if _, err := anyl.Accept(); err != nil {
 		t.Fatal(err)
 	}

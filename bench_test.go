@@ -32,7 +32,6 @@ func BenchmarkCMuxConn(b *testing.B) {
 		}
 	}()
 
-	donec := make(chan struct{})
 	var wg sync.WaitGroup
 	wg.Add(b.N)
 
@@ -41,6 +40,6 @@ func BenchmarkCMuxConn(b *testing.B) {
 		c := &mockConn{
 			r: bytes.NewReader(benchHTTPPayload),
 		}
-		m.serve(c, donec, &wg)
+		m.serve(c, &wg)
 	}
 }
