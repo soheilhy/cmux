@@ -19,9 +19,9 @@ const (
 	rpcVal        = 1234
 )
 
-func safeServe(t *testing.T, muxl CMux) {
+func safeServe(errCh chan<- error, muxl CMux) {
 	if err := muxl.Serve(); !strings.Contains(err.Error(), "use of closed network connection") {
-		t.Fatal(err)
+		errCh <- err
 	}
 }
 
@@ -55,7 +55,7 @@ func (h *testHTTP1Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, testHTTP1Resp)
 }
 
-func runTestHTTPServer(t *testing.T, l net.Listener) {
+func runTestHTTPServer(errCh chan<- error, l net.Listener) {
 	var mu sync.Mutex
 	conns := make(map[net.Conn]struct{})
 
@@ -63,7 +63,7 @@ func runTestHTTPServer(t *testing.T, l net.Listener) {
 		mu.Lock()
 		for c := range conns {
 			if err := c.Close(); err != nil {
-				t.Fatal(err)
+				errCh <- err
 			}
 		}
 		mu.Unlock()
@@ -83,7 +83,7 @@ func runTestHTTPServer(t *testing.T, l net.Listener) {
 		},
 	}
 	if err := s.Serve(l); err != ErrListenerClosed {
-		t.Fatal(err)
+		errCh <- err
 	}
 }
 
@@ -115,16 +115,16 @@ func (r TestRPCRcvr) Test(i int, j *int) error {
 	return nil
 }
 
-func runTestRPCServer(t *testing.T, l net.Listener) {
+func runTestRPCServer(errCh chan<- error, l net.Listener) {
 	s := rpc.NewServer()
 	if err := s.Register(TestRPCRcvr{}); err != nil {
-		t.Fatal(err)
+		errCh <- err
 	}
 	for {
 		c, err := l.Accept()
 		if err != nil {
 			if err != ErrListenerClosed {
-				t.Fatal(err)
+				errCh <- err
 			}
 			return
 		}
@@ -148,20 +148,36 @@ func runTestRPCClient(t *testing.T, addr net.Addr) {
 
 func TestAny(t *testing.T) {
 	defer leakCheck(t)()
+	errCh := make(chan error)
+	defer func() {
+		select {
+		case err := <-errCh:
+			t.Fatal(err)
+		default:
+		}
+	}()
 	l, cleanup := testListener(t)
 	defer cleanup()
 
 	muxl := New(l)
 	httpl := muxl.Match(Any())
 
-	go runTestHTTPServer(t, httpl)
-	go safeServe(t, muxl)
+	go runTestHTTPServer(errCh, httpl)
+	go safeServe(errCh, muxl)
 
 	runTestHTTP1Client(t, l.Addr())
 }
 
 func TestHTTPGoRPC(t *testing.T) {
 	defer leakCheck(t)()
+	errCh := make(chan error)
+	defer func() {
+		select {
+		case err := <-errCh:
+			t.Fatal(err)
+		default:
+		}
+	}()
 	l, cleanup := testListener(t)
 	defer cleanup()
 
@@ -169,9 +185,9 @@ func TestHTTPGoRPC(t *testing.T) {
 	httpl := muxl.Match(HTTP2(), HTTP1Fast())
 	rpcl := muxl.Match(Any())
 
-	go runTestHTTPServer(t, httpl)
-	go runTestRPCServer(t, rpcl)
-	go safeServe(t, muxl)
+	go runTestHTTPServer(errCh, httpl)
+	go runTestRPCServer(errCh, rpcl)
+	go safeServe(errCh, muxl)
 
 	runTestHTTP1Client(t, l.Addr())
 	runTestRPCClient(t, l.Addr())
@@ -179,14 +195,22 @@ func TestHTTPGoRPC(t *testing.T) {
 
 func TestErrorHandler(t *testing.T) {
 	defer leakCheck(t)()
+	errCh := make(chan error)
+	defer func() {
+		select {
+		case err := <-errCh:
+			t.Fatal(err)
+		default:
+		}
+	}()
 	l, cleanup := testListener(t)
 	defer cleanup()
 
 	muxl := New(l)
 	httpl := muxl.Match(HTTP2(), HTTP1Fast())
 
-	go runTestHTTPServer(t, httpl)
-	go safeServe(t, muxl)
+	go runTestHTTPServer(errCh, httpl)
+	go safeServe(errCh, muxl)
 
 	firstErr := true
 	muxl.HandleError(func(err error) bool {
