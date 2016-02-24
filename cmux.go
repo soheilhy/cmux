@@ -98,6 +98,10 @@ func (m *cMux) Serve() error {
 
 		for _, sl := range m.sls {
 			close(sl.l.connc)
+			// Drain the connections enqueued for the listener.
+			for c := range sl.l.connc {
+				_ = c.Close()
+			}
 		}
 	}()
 
@@ -126,12 +130,8 @@ func (m *cMux) serve(c net.Conn, donec <-chan struct{}, wg *sync.WaitGroup) {
 			if matched {
 				select {
 				case sl.l.connc <- muc:
-				default:
-					select {
-					case <-donec:
-						_ = c.Close()
-					default:
-					}
+				case <-donec:
+					_ = c.Close()
 				}
 				return
 			}

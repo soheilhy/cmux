@@ -262,17 +262,17 @@ func TestHTTP2(t *testing.T) {
 	})
 	h2l := muxl.Match(HTTP2())
 	go safeServe(errCh, muxl)
+	muxedConn, err := h2l.Accept()
 	close(l.connCh)
-	if muxedConn, err := h2l.Accept(); err != nil {
+	if err != nil {
 		t.Fatal(err)
-	} else {
-		var b [len(http2.ClientPreface)]byte
-		if _, err := muxedConn.Read(b[:]); err != io.EOF {
-			t.Fatal(err)
-		}
-		if string(b[:]) != http2.ClientPreface {
-			t.Errorf("got unexpected read %s, expected %s", b, http2.ClientPreface)
-		}
+	}
+	var b [len(http2.ClientPreface)]byte
+	if _, err := muxedConn.Read(b[:]); err != io.EOF {
+		t.Fatal(err)
+	}
+	if string(b[:]) != http2.ClientPreface {
+		t.Errorf("got unexpected read %s, expected %s", b, http2.ClientPreface)
 	}
 }
 
@@ -374,9 +374,14 @@ func TestClose(t *testing.T) {
 	// Listener is closed.
 	close(l.connCh)
 
-	// Second connection goes through.
+	// Second connection either goes through or it is closed.
 	if _, err := anyl.Accept(); err != nil {
-		t.Fatal(err)
+		if err != ErrListenerClosed {
+			t.Fatal(err)
+		}
+		if _, err := c2.Read([]byte{}); err != io.ErrClosedPipe {
+			t.Fatalf("connection is not closed and is leaked: %v", err)
+		}
 	}
 }
 
