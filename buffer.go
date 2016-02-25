@@ -1,57 +1,42 @@
 package cmux
 
-import "io"
+import (
+	"bytes"
+	"io"
+)
 
-var _ io.ReadWriter = (*buffer)(nil)
-
-type buffer struct {
-	read int
-	data []byte
+// bufferedReader is an optimized implementation of io.Reader that behaves like
+// ```
+// io.MultiReader(bytes.NewReader(buffer.Bytes()), io.TeeReader(source, buffer))
+// ```
+// without allocating.
+type bufferedReader struct {
+	source     io.Reader
+	buffer     bytes.Buffer
+	bufferRead int
+	bufferSize int
+	sniffing   bool
 }
 
-// From the io.Reader documentation:
-//
-// When Read encounters an error or end-of-file condition after
-// successfully reading n > 0 bytes, it returns the number of
-// bytes read.  It may return the (non-nil) error from the same call
-// or return the error (and n == 0) from a subsequent call.
-// An instance of this general case is that a Reader returning
-// a non-zero number of bytes at the end of the input stream may
-// return either err == EOF or err == nil.  The next Read should
-// return 0, EOF.
-//
-// This function implements the latter behaviour, returning the
-// (non-nil) error from the same call.
-func (b *buffer) Read(p []byte) (int, error) {
-	var err error
-	n := copy(p, b.data[b.read:])
-	b.read += n
-	if b.read == len(b.data) {
-		err = io.EOF
+func (s *bufferedReader) Read(p []byte) (int, error) {
+	// Functionality of bytes.Reader.
+	bn := copy(p, s.buffer.Bytes()[s.bufferRead:s.bufferSize])
+	s.bufferRead += bn
+
+	p = p[bn:]
+
+	// Funtionality of io.TeeReader.
+	sn, sErr := s.source.Read(p)
+	if sn > 0 && s.sniffing {
+		if wn, wErr := s.buffer.Write(p[:sn]); wErr != nil {
+			return bn + wn, wErr
+		}
 	}
-	return n, err
+	return bn + sn, sErr
 }
 
-func (b *buffer) Len() int {
-	return len(b.data) - b.read
-}
-
-func (b *buffer) resetRead() {
-	b.read = 0
-}
-
-// From the io.Writer documentation:
-//
-// Write writes len(p) bytes from p to the underlying data stream.
-// It returns the number of bytes written from p (0 <= n <= len(p))
-// and any error encountered that caused the write to stop early.
-// Write must return a non-nil error if it returns n < len(p).
-// Write must not modify the slice data, even temporarily.
-//
-// Implementations must not retain p.
-//
-// In a previous incarnation, this implementation retained the incoming slice.
-func (b *buffer) Write(p []byte) (int, error) {
-	b.data = append(b.data, p...)
-	return len(p), nil
+func (s *bufferedReader) reset(snif bool) {
+	s.sniffing = snif
+	s.bufferRead = 0
+	s.bufferSize = s.buffer.Len()
 }
