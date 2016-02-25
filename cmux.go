@@ -1,6 +1,7 @@
 package cmux
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"net"
@@ -125,8 +126,7 @@ func (m *cMux) serve(c net.Conn, donec <-chan struct{}, wg *sync.WaitGroup) {
 	muc := newMuxConn(c)
 	for _, sl := range m.sls {
 		for _, s := range sl.ss {
-			matched := s(muc.sniffer())
-			muc.reset()
+			matched := s(muc.getSniffer())
 			if matched {
 				select {
 				case sl.l.connc <- muc:
@@ -177,7 +177,8 @@ func (l muxListener) Accept() (net.Conn, error) {
 // MuxConn wraps a net.Conn and provides transparent sniffing of connection data.
 type MuxConn struct {
 	net.Conn
-	buf buffer
+	buf     bytes.Buffer
+	sniffer bufferedReader
 }
 
 func newMuxConn(c net.Conn) *MuxConn {
@@ -201,17 +202,17 @@ func newMuxConn(c net.Conn) *MuxConn {
 // (non-nil) error from the same call.
 func (m *MuxConn) Read(p []byte) (int, error) {
 	n1, err := m.buf.Read(p)
-	if err != io.EOF {
+	if err == nil && m.buf.Len() == 0 {
+		err = io.EOF
+	}
+	if n1 == len(p) || err != io.EOF {
 		return n1, err
 	}
 	n2, err := m.Conn.Read(p[n1:])
 	return n1 + n2, err
 }
 
-func (m *MuxConn) sniffer() io.Reader {
-	return io.MultiReader(&m.buf, io.TeeReader(m.Conn, &m.buf))
-}
-
-func (m *MuxConn) reset() {
-	m.buf.resetRead()
+func (m *MuxConn) getSniffer() io.Reader {
+	m.sniffer = bufferedReader{source: m.Conn, buffer: &m.buf, bufferSize: m.buf.Len()}
+	return &m.sniffer
 }
