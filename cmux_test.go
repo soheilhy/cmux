@@ -109,23 +109,21 @@ func runTestHTTPServer(errCh chan<- error, l net.Listener) {
 }
 
 func runTestHTTP1Client(t *testing.T, addr net.Addr) {
-	r, err := http.Get("http://" + addr.String())
-	if err != nil {
+	if r, err := http.Get("http://" + addr.String()); err != nil {
 		t.Fatal(err)
-	}
-
-	defer func() {
-		if err := r.Body.Close(); err != nil {
+	} else {
+		defer func() {
+			if err := r.Body.Close(); err != nil {
+				t.Fatal(err)
+			}
+		}()
+		if b, err := ioutil.ReadAll(r.Body); err != nil {
 			t.Fatal(err)
+		} else {
+			if string(b) != testHTTP1Resp {
+				t.Fatalf("invalid response: want=%s got=%s", testHTTP1Resp, b)
+			}
 		}
-	}()
-	b, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if string(b) != testHTTP1Resp {
-		t.Errorf("invalid response: want=%s got=%s", testHTTP1Resp, b)
 	}
 }
 
