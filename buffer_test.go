@@ -6,8 +6,31 @@ import (
 	"testing"
 )
 
+func TestWriteNoModify(t *testing.T) {
+	var b buffer
+
+	const origWriteByte = 0
+	const postWriteByte = 1
+
+	writeBytes := []byte{origWriteByte}
+	if _, err := b.Write(writeBytes); err != nil {
+		t.Fatal(err)
+	}
+	writeBytes[0] = postWriteByte
+	readBytes := make([]byte, 1)
+	if _, err := b.Read(readBytes); err != io.EOF {
+		t.Fatal(err)
+	}
+
+	if readBytes[0] != origWriteByte {
+		t.Fatalf("expected to read %x, but read %x; buffer retained passed-in slice", origWriteByte, postWriteByte)
+	}
+}
+
+const writeString = "deadbeef"
+
 func TestBuffer(t *testing.T) {
-	writeBytes := []byte("deadbeef")
+	writeBytes := []byte(writeString)
 
 	const numWrites = 10
 
@@ -54,7 +77,7 @@ func TestBuffer(t *testing.T) {
 }
 
 func TestBufferOffset(t *testing.T) {
-	writeBytes := []byte("deadbeef")
+	writeBytes := []byte(writeString)
 
 	var b buffer
 	n, err := b.Write(writeBytes)

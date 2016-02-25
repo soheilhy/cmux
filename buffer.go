@@ -2,6 +2,8 @@ package cmux
 
 import "io"
 
+var _ io.ReadWriter = (*buffer)(nil)
+
 type buffer struct {
 	read int
 	data []byte
@@ -38,13 +40,18 @@ func (b *buffer) resetRead() {
 	b.read = 0
 }
 
-func (b *buffer) Write(p []byte) (n int, err error) {
-	n = len(p)
-	if b.data == nil {
-		b.data = p[:n:n]
-		return
-	}
-
+// From the io.Writer documentation:
+//
+// Write writes len(p) bytes from p to the underlying data stream.
+// It returns the number of bytes written from p (0 <= n <= len(p))
+// and any error encountered that caused the write to stop early.
+// Write must return a non-nil error if it returns n < len(p).
+// Write must not modify the slice data, even temporarily.
+//
+// Implementations must not retain p.
+//
+// In a previous incarnation, this implementation retained the incoming slice.
+func (b *buffer) Write(p []byte) (int, error) {
 	b.data = append(b.data, p...)
-	return
+	return len(p), nil
 }
