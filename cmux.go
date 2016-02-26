@@ -197,19 +197,11 @@ func newMuxConn(c net.Conn) *MuxConn {
 // a non-zero number of bytes at the end of the input stream may
 // return either err == EOF or err == nil.  The next Read should
 // return 0, EOF.
-//
-// This function implements the latter behaviour, returning the
-// (non-nil) error from the same call.
 func (m *MuxConn) Read(p []byte) (int, error) {
-	n1, err := m.buf.Read(p)
-	if err == nil && m.buf.Len() == 0 {
-		err = io.EOF
+	if n, err := m.buf.Read(p); err != io.EOF {
+		return n, err
 	}
-	if n1 == len(p) || err != io.EOF {
-		return n1, err
-	}
-	n2, err := m.Conn.Read(p[n1:])
-	return n1 + n2, err
+	return m.Conn.Read(p)
 }
 
 func (m *MuxConn) getSniffer() io.Reader {
