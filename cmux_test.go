@@ -283,12 +283,20 @@ func TestHTTP2(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var b [len(http2.ClientPreface)]byte
-	if _, err := muxedConn.Read(b[:]); err != io.EOF {
-		t.Fatal(err)
+	{
+		var b [len(http2.ClientPreface)]byte
+		if _, err := muxedConn.Read(b[:]); err != nil {
+			t.Fatal(err)
+		}
+		if string(b[:]) != http2.ClientPreface {
+			t.Errorf("got unexpected read %s, expected %s", b, http2.ClientPreface)
+		}
 	}
-	if string(b[:]) != http2.ClientPreface {
-		t.Errorf("got unexpected read %s, expected %s", b, http2.ClientPreface)
+	{
+		var b [1]byte
+		if _, err := muxedConn.Read(b[:]); err != io.EOF {
+			t.Errorf("unexpected error %v, expected %v", err, io.EOF)
+		}
 	}
 }
 
