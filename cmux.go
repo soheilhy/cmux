@@ -10,6 +10,9 @@ import (
 // Matcher matches a connection based on its content.
 type Matcher func(io.Reader) bool
 
+// MatchWriter is a match that can also write response (say to do handshake).
+type MatchWriter func(io.Writer, io.Reader) bool
+
 // ErrorHandler handles an error and returns whether
 // the mux should continue serving the listener.
 type ErrorHandler func(error) bool
@@ -60,6 +63,14 @@ type CMux interface {
 	//
 	// The order used to call Match determines the priority of matchers.
 	Match(...Matcher) net.Listener
+	// MatchWithWriters returns a net.Listener that accepts only the
+	// connections that matched by at least of the matcher writers.
+	//
+	// Prefer Matchers over MatchWriters, since the latter can write on the
+	// connection before the actual handler.
+	//
+	// The order used to call Match determines the priority of matchers.
+	MatchWithWriters(...MatchWriter) net.Listener
 	// Serve starts multiplexing the listener. Serve blocks and perhaps
 	// should be invoked concurrently within a go routine.
 	Serve() error
@@ -68,7 +79,7 @@ type CMux interface {
 }
 
 type matchersListener struct {
-	ss []Matcher
+	ss []MatchWriter
 	l  muxListener
 }
 
@@ -80,7 +91,22 @@ type cMux struct {
 	sls    []matchersListener
 }
 
+func matchersToMatchWriters(matchers []Matcher) []MatchWriter {
+	mws := make([]MatchWriter, 0, len(matchers))
+	for _, m := range matchers {
+		mws = append(mws, func(w io.Writer, r io.Reader) bool {
+			return m(r)
+		})
+	}
+	return mws
+}
+
 func (m *cMux) Match(matchers ...Matcher) net.Listener {
+	mws := matchersToMatchWriters(matchers)
+	return m.MatchWithWriters(mws...)
+}
+
+func (m *cMux) MatchWithWriters(matchers ...MatchWriter) net.Listener {
 	ml := muxListener{
 		Listener: m.root,
 		connc:    make(chan net.Conn, m.bufLen),
@@ -125,7 +151,7 @@ func (m *cMux) serve(c net.Conn, donec <-chan struct{}, wg *sync.WaitGroup) {
 	muc := newMuxConn(c)
 	for _, sl := range m.sls {
 		for _, s := range sl.ss {
-			matched := s(muc.startSniffing())
+			matched := s(muc.Conn, muc.startSniffing())
 			if matched {
 				muc.doneSniffing()
 				select {
