@@ -125,9 +125,9 @@ func (m *cMux) serve(c net.Conn, donec <-chan struct{}, wg *sync.WaitGroup) {
 	muc := newMuxConn(c)
 	for _, sl := range m.sls {
 		for _, s := range sl.ss {
-			matched := s(muc.sniffer())
-			muc.reset()
+			matched := s(muc.startSniffing())
 			if matched {
+				muc.doneSniffing()
 				select {
 				case sl.l.connc <- muc:
 				case <-donec:
@@ -177,12 +177,13 @@ func (l muxListener) Accept() (net.Conn, error) {
 // MuxConn wraps a net.Conn and provides transparent sniffing of connection data.
 type MuxConn struct {
 	net.Conn
-	buf buffer
+	buf bufferedReader
 }
 
 func newMuxConn(c net.Conn) *MuxConn {
 	return &MuxConn{
 		Conn: c,
+		buf:  bufferedReader{source: c},
 	}
 }
 
@@ -196,22 +197,15 @@ func newMuxConn(c net.Conn) *MuxConn {
 // a non-zero number of bytes at the end of the input stream may
 // return either err == EOF or err == nil.  The next Read should
 // return 0, EOF.
-//
-// This function implements the latter behaviour, returning the
-// (non-nil) error from the same call.
 func (m *MuxConn) Read(p []byte) (int, error) {
-	n1, err := m.buf.Read(p)
-	if err != io.EOF {
-		return n1, err
-	}
-	n2, err := m.Conn.Read(p[n1:])
-	return n1 + n2, err
+	return m.buf.Read(p)
 }
 
-func (m *MuxConn) sniffer() io.Reader {
-	return io.MultiReader(&m.buf, io.TeeReader(m.Conn, &m.buf))
+func (m *MuxConn) startSniffing() io.Reader {
+	m.buf.reset(true)
+	return &m.buf
 }
 
-func (m *MuxConn) reset() {
-	m.buf.resetRead()
+func (m *MuxConn) doneSniffing() {
+	m.buf.reset(false)
 }
