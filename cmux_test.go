@@ -279,7 +279,13 @@ func TestHTTP2(t *testing.T) {
 		t.Fatal(err)
 	}
 	var b [len(http2.ClientPreface)]byte
-	if _, err := muxedConn.Read(b[:]); err != io.EOF {
+	var n int
+	// We have the sniffed buffer first...
+	if n, err = muxedConn.Read(b[:]); err == io.EOF {
+		t.Fatal(err)
+	}
+	// and then we read from the source.
+	if _, err = muxedConn.Read(b[n:]); err != io.EOF {
 		t.Fatal(err)
 	}
 	if string(b[:]) != http2.ClientPreface {
