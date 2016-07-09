@@ -74,3 +74,10 @@ gRPC server please match with writers:
 ```go
 grpcl := m.MatchWithWriters(cmux.HTTP2MatchHeaderFieldSendSettings("content-type", "application/grpc"))
 ```
+
+# Copyright and License
+Copyright 2016 The CMux Authors. All rights reserved.
+
+See [CONTRIBUTORS](https://github.com/soheilhy/cmux/blob/master/CONTRIBUTORS)
+for the CMux Authors. Code is released under
+[the Apache 2 license](https://github.com/soheilhy/cmux/blob/master/LICENSE).
