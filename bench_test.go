@@ -62,12 +62,14 @@ func BenchmarkCMuxConnHTTP1(b *testing.B) {
 	wg.Add(b.N)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		c := &mockConn{
-			r: bytes.NewReader(benchHTTP1Payload),
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			wg.Add(1)
+			m.serve(&mockConn{
+				r: bytes.NewReader(benchHTTP1Payload),
+			}, donec, &wg)
 		}
-		m.serve(c, donec, &wg)
-	}
+	})
 }
 
 func BenchmarkCMuxConnHTTP2(b *testing.B) {
@@ -80,12 +82,14 @@ func BenchmarkCMuxConnHTTP2(b *testing.B) {
 	wg.Add(b.N)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		c := &mockConn{
-			r: bytes.NewReader(benchHTTP2Payload),
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			wg.Add(1)
+			m.serve(&mockConn{
+				r: bytes.NewReader(benchHTTP2Payload),
+			}, donec, &wg)
 		}
-		m.serve(c, donec, &wg)
-	}
+	})
 }
 
 func BenchmarkCMuxConnHTTP1n2(b *testing.B) {
@@ -98,15 +102,16 @@ func BenchmarkCMuxConnHTTP1n2(b *testing.B) {
 
 	donec := make(chan struct{})
 	var wg sync.WaitGroup
-	wg.Add(b.N)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		c := &mockConn{
-			r: bytes.NewReader(benchHTTP2Payload),
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			wg.Add(1)
+			m.serve(&mockConn{
+				r: bytes.NewReader(benchHTTP2Payload),
+			}, donec, &wg)
 		}
-		m.serve(c, donec, &wg)
-	}
+	})
 }
 
 func BenchmarkCMuxConnHTTP2n1(b *testing.B) {
@@ -119,13 +124,14 @@ func BenchmarkCMuxConnHTTP2n1(b *testing.B) {
 
 	donec := make(chan struct{})
 	var wg sync.WaitGroup
-	wg.Add(b.N)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		c := &mockConn{
-			r: bytes.NewReader(benchHTTP1Payload),
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			wg.Add(1)
+			m.serve(&mockConn{
+				r: bytes.NewReader(benchHTTP1Payload),
+			}, donec, &wg)
 		}
-		m.serve(c, donec, &wg)
-	}
+	})
 }
