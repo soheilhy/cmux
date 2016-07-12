@@ -17,13 +17,17 @@ package cmux
 import (
 	"bytes"
 	"io"
+	"sync"
 )
 
 // patriciaTree is a simple patricia tree that handles []byte instead of string
 // and cannot be changed after instantiation.
 type patriciaTree struct {
 	root *ptNode
-	buf  []byte // preallocated buffer to read data while matching
+	mu   struct {
+		sync.Mutex
+		buf []byte // preallocated buffer to read data while matching
+	}
 }
 
 func newPatriciaTree(bs ...[]byte) *patriciaTree {
@@ -33,10 +37,10 @@ func newPatriciaTree(bs ...[]byte) *patriciaTree {
 			max = len(b)
 		}
 	}
-	return &patriciaTree{
-		root: newNode(bs),
-		buf:  make([]byte, max+1),
-	}
+	t := patriciaTree{root: newNode(bs)}
+	t.mu.buf = make([]byte, max+1)
+
+	return &t
 }
 
 func newPatriciaTreeString(strs ...string) *patriciaTree {
@@ -48,13 +52,19 @@ func newPatriciaTreeString(strs ...string) *patriciaTree {
 }
 
 func (t *patriciaTree) matchPrefix(r io.Reader) bool {
-	n, _ := io.ReadFull(r, t.buf)
-	return t.root.match(t.buf[:n], true)
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	n, _ := io.ReadFull(r, t.mu.buf)
+	return t.root.match(t.mu.buf[:n], true)
 }
 
 func (t *patriciaTree) match(r io.Reader) bool {
-	n, _ := io.ReadFull(r, t.buf)
-	return t.root.match(t.buf[:n], false)
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	n, _ := io.ReadFull(r, t.mu.buf)
+	return t.root.match(t.mu.buf[:n], false)
 }
 
 type ptNode struct {
