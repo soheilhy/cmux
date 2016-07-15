@@ -33,6 +33,13 @@ func testPTree(t *testing.T, strs ...string) {
 		if pt.match(strings.NewReader(s + s)) {
 			t.Errorf("%s matches %s", s+s, s)
 		}
+
+		// The following tests are just to catch index out of
+		// range and off-by-one errors and not the functionality.
+		pt.matchPrefix(strings.NewReader(s[:len(s)-1]))
+		pt.match(strings.NewReader(s[:len(s)-1]))
+		pt.matchPrefix(strings.NewReader(s + "$"))
+		pt.match(strings.NewReader(s + "$"))
 	}
 }
 
@@ -45,5 +52,5 @@ func TestPatriciaNonOverlapping(t *testing.T) {
 }
 
 func TestPatriciaOverlapping(t *testing.T) {
-	testPTree(t, "foo", "far", "farther", "boo", "bar")
+	testPTree(t, "foo", "far", "farther", "boo", "ba", "bar")
 }
