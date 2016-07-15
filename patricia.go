@@ -161,6 +161,10 @@ func (n *ptNode) match(b []byte, prefix bool) bool {
 		return true
 	}
 
+	if l >= len(b) {
+		return false
+	}
+
 	nextN, ok := n.next[b[l]]
 	if !ok {
 		return false
