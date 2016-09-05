@@ -20,6 +20,7 @@ import (
 	"net"
 	"sync"
 	"testing"
+	"time"
 
 	"golang.org/x/net/http2"
 )
@@ -41,6 +42,10 @@ type mockConn struct {
 
 func (c *mockConn) Read(b []byte) (n int, err error) {
 	return c.r.Read(b)
+}
+
+func (c *mockConn) SetReadDeadline(time.Time) error {
+	return nil
 }
 
 func discard(l net.Listener) {

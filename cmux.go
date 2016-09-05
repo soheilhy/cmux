@@ -19,6 +19,7 @@ import (
 	"io"
 	"net"
 	"sync"
+	"time"
 )
 
 // Matcher matches a connection based on its content.
@@ -60,13 +61,17 @@ func (e errListenerClosed) Timeout() bool   { return false }
 // listener is closed.
 var ErrListenerClosed = errListenerClosed("mux: listener closed")
 
+// for readability of readTimeout
+var noTimeout time.Duration
+
 // New instantiates a new connection multiplexer.
 func New(l net.Listener) CMux {
 	return &cMux{
-		root:   l,
-		bufLen: 1024,
-		errh:   func(_ error) bool { return true },
-		donec:  make(chan struct{}),
+		root:        l,
+		bufLen:      1024,
+		errh:        func(_ error) bool { return true },
+		donec:       make(chan struct{}),
+		readTimeout: noTimeout,
 	}
 }
 
@@ -90,6 +95,8 @@ type CMux interface {
 	Serve() error
 	// HandleError registers an error handler that handles listener errors.
 	HandleError(ErrorHandler)
+	// sets a timeout for the read of matchers
+	SetReadTimeout(time.Duration)
 }
 
 type matchersListener struct {
@@ -98,11 +105,12 @@ type matchersListener struct {
 }
 
 type cMux struct {
-	root   net.Listener
-	bufLen int
-	errh   ErrorHandler
-	donec  chan struct{}
-	sls    []matchersListener
+	root        net.Listener
+	bufLen      int
+	errh        ErrorHandler
+	donec       chan struct{}
+	sls         []matchersListener
+	readTimeout time.Duration
 }
 
 func matchersToMatchWriters(matchers []Matcher) []MatchWriter {
@@ -127,6 +135,10 @@ func (m *cMux) MatchWithWriters(matchers ...MatchWriter) net.Listener {
 	}
 	m.sls = append(m.sls, matchersListener{ss: matchers, l: ml})
 	return ml
+}
+
+func (m *cMux) SetReadTimeout(t time.Duration) {
+	m.readTimeout = t
 }
 
 func (m *cMux) Serve() error {
@@ -163,11 +175,17 @@ func (m *cMux) serve(c net.Conn, donec <-chan struct{}, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	muc := newMuxConn(c)
+	if m.readTimeout > noTimeout {
+		_ = c.SetReadDeadline(time.Now().Add(m.readTimeout))
+	}
 	for _, sl := range m.sls {
 		for _, s := range sl.ss {
 			matched := s(muc.Conn, muc.startSniffing())
 			if matched {
 				muc.doneSniffing()
+				if m.readTimeout > noTimeout {
+					_ = c.SetReadDeadline(time.Time{})
+				}
 				select {
 				case sl.l.connc <- muc:
 				case <-donec:

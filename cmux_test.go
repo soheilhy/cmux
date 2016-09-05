@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"net"
 	"net/http"
 	"net/rpc"
@@ -73,14 +74,17 @@ func (l *chanListener) Accept() (net.Conn, error) {
 }
 
 func testListener(t *testing.T) (net.Listener, func()) {
-	l, err := net.Listen("tcp", ":0")
+	l, err := net.Listen("tcp4", ":0")
 	if err != nil {
 		t.Fatal(err)
 	}
+	var once sync.Once
 	return l, func() {
-		if err := l.Close(); err != nil {
-			t.Fatal(err)
-		}
+		once.Do(func() {
+			if err := l.Close(); err != nil {
+				t.Fatal(err)
+			}
+		})
 	}
 }
 
@@ -178,6 +182,84 @@ func runTestRPCClient(t *testing.T, addr net.Addr) {
 
 	if num != rpcVal {
 		t.Errorf("wrong rpc response: want=%d got=%v", rpcVal, num)
+	}
+}
+
+const (
+	handleHttp1Close   = 1
+	handleHttp1Request = 2
+	handleAnyClose     = 3
+	handleAnyRequest   = 4
+)
+
+func TestTimeout(t *testing.T) {
+	defer leakCheck(t)()
+	lis, Close := testListener(t)
+	defer Close()
+	result := make(chan int, 5)
+	testDuration := time.Millisecond * 100
+	m := New(lis)
+	m.SetReadTimeout(testDuration)
+	http1 := m.Match(HTTP1Fast())
+	any := m.Match(Any())
+	go func() {
+		_ = m.Serve()
+	}()
+	go func() {
+		con, err := http1.Accept()
+		if err != nil {
+			result <- handleHttp1Close
+		} else {
+			_, _ = con.Write([]byte("http1"))
+			_ = con.Close()
+			result <- handleHttp1Request
+		}
+	}()
+	go func() {
+		con, err := any.Accept()
+		if err != nil {
+			result <- handleAnyClose
+		} else {
+			_, _ = con.Write([]byte("any"))
+			_ = con.Close()
+			result <- handleAnyRequest
+		}
+	}()
+	time.Sleep(testDuration) // wait to prevent timeouts on slow test-runners
+	client, err := net.Dial("tcp", lis.Addr().String())
+	if err != nil {
+		log.Fatal("testTimeout client failed: ", err)
+	}
+	defer func() {
+		_ = client.Close()
+	}()
+	time.Sleep(testDuration / 2)
+	if len(result) != 0 {
+		log.Print("tcp ")
+		t.Fatal("testTimeout failed: accepted to fast: ", len(result))
+	}
+	_ = client.SetReadDeadline(time.Now().Add(testDuration * 3))
+	buffer := make([]byte, 10)
+	rl, err := client.Read(buffer)
+	if err != nil {
+		t.Fatal("testTimeout failed: client error: ", err, rl)
+	}
+	Close()
+	if rl != 3 {
+		log.Print("testTimeout failed: response from wrong sevice ", rl)
+	}
+	if string(buffer[0:3]) != "any" {
+		log.Print("testTimeout failed: response from wrong sevice ")
+	}
+	time.Sleep(testDuration * 2)
+	if len(result) != 2 {
+		t.Fatal("testTimeout failed: accepted to less: ", len(result))
+	}
+	if a := <-result; a != handleAnyRequest {
+		t.Fatal("testTimeout failed: any rule did not match")
+	}
+	if a := <-result; a != handleHttp1Close {
+		t.Fatal("testTimeout failed: no close an http rule")
 	}
 }
 
@@ -439,6 +521,7 @@ func interestingGoroutines() (gs []string) {
 		}
 
 		if stack == "" ||
+			strings.Contains(stack, "main.main()") ||
 			strings.Contains(stack, "testing.Main(") ||
 			strings.Contains(stack, "runtime.goexit") ||
 			strings.Contains(stack, "created by runtime.gc") ||
