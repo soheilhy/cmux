@@ -42,6 +42,10 @@ func (s *bufferedReader) Read(p []byte) (int, error) {
 		bn := copy(p, s.buffer.Bytes()[s.bufferRead:s.bufferSize])
 		s.bufferRead += bn
 		return bn, s.lastErr
+	} else if !s.sniffing && s.buffer.Cap() != 0 {
+		// We don't need the buffer anymore.
+		// Reset it to release the internal slice.
+		s.buffer = bytes.Buffer{}
 	}
 
 	// If there is nothing more to return in the sniffed buffer, read from the
