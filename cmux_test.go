@@ -188,8 +188,8 @@ func runTestRPCClient(t *testing.T, addr net.Addr) {
 }
 
 const (
-	handleHttp1Close   = 1
-	handleHttp1Request = 2
+	handleHTTP1Close   = 1
+	handleHTTP1Request = 2
 	handleAnyClose     = 3
 	handleAnyRequest   = 4
 )
@@ -210,11 +210,11 @@ func TestTimeout(t *testing.T) {
 	go func() {
 		con, err := http1.Accept()
 		if err != nil {
-			result <- handleHttp1Close
+			result <- handleHTTP1Close
 		} else {
 			_, _ = con.Write([]byte("http1"))
 			_ = con.Close()
-			result <- handleHttp1Request
+			result <- handleHTTP1Request
 		}
 	}()
 	go func() {
@@ -260,7 +260,7 @@ func TestTimeout(t *testing.T) {
 	if a := <-result; a != handleAnyRequest {
 		t.Fatal("testTimeout failed: any rule did not match")
 	}
-	if a := <-result; a != handleHttp1Close {
+	if a := <-result; a != handleHTTP1Close {
 		t.Fatal("testTimeout failed: no close an http rule")
 	}
 }
