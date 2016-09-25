@@ -15,6 +15,7 @@
 package cmux
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -32,6 +33,7 @@ import (
 	"time"
 
 	"golang.org/x/net/http2"
+	"golang.org/x/net/http2/hpack"
 )
 
 const (
@@ -387,6 +389,72 @@ func TestHTTP2(t *testing.T) {
 	}
 	// and then we read from the source.
 	if _, err = muxedConn.Read(b[n:]); err != io.EOF {
+		t.Fatal(err)
+	}
+	if string(b[:]) != http2.ClientPreface {
+		t.Errorf("got unexpected read %s, expected %s", b, http2.ClientPreface)
+	}
+}
+
+func TestHTTP2MatchHeaderField(t *testing.T) {
+	defer leakCheck(t)()
+	errCh := make(chan error)
+	defer func() {
+		select {
+		case err := <-errCh:
+			t.Fatal(err)
+		default:
+		}
+	}()
+	name := "name"
+	value := "value"
+	writer, reader := net.Pipe()
+	go func() {
+		if _, err := io.WriteString(writer, http2.ClientPreface); err != nil {
+			t.Fatal(err)
+		}
+		var buf bytes.Buffer
+		enc := hpack.NewEncoder(&buf)
+		if err := enc.WriteField(hpack.HeaderField{Name: name, Value: value}); err != nil {
+			t.Fatal(err)
+		}
+		framer := http2.NewFramer(writer, nil)
+		err := framer.WriteHeaders(http2.HeadersFrameParam{
+			StreamID:      1,
+			BlockFragment: buf.Bytes(),
+			EndStream:     true,
+			EndHeaders:    true,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := writer.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	l := newChanListener()
+	l.connCh <- reader
+	muxl := New(l)
+	// Register a bogus matcher that only reads one byte.
+	muxl.Match(func(r io.Reader) bool {
+		var b [1]byte
+		_, _ = r.Read(b[:])
+		return false
+	})
+	// Create a matcher that cannot match the response.
+	muxl.Match(HTTP2HeaderField(name, "another"+value))
+	// Then match with the expected field.
+	h2l := muxl.Match(HTTP2HeaderField(name, value))
+	go safeServe(errCh, muxl)
+	muxedConn, err := h2l.Accept()
+	close(l.connCh)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var b [len(http2.ClientPreface)]byte
+	// We have the sniffed buffer first...
+	if _, err := muxedConn.Read(b[:]); err == io.EOF {
 		t.Fatal(err)
 	}
 	if string(b[:]) != http2.ClientPreface {
