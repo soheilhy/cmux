@@ -35,20 +35,29 @@ type bufferedReader struct {
 }
 
 func (s *bufferedReader) Read(p []byte) (int, error) {
-	if s.off < len(s.rbuf) {
-		n := copy(p, s.rbuf[s.off:])
-		s.off += n
-		return n, nil
+	if len(s.rbuf) > 0 {
+		if s.off < len(s.rbuf) {
+			n := copy(p, s.rbuf[s.off:])
+			s.off += n
+			return n, nil
+		}
 
-	} else if s.src == s.source {
+		// we will need to reset to s.buf.Bytes() anyways.
 		s.rbuf = nil
-		s.buf.Reset()
 	}
 
 	return s.src.Read(p)
 }
 
+
+// reset starts over at the begining of the buffer again, and if we're sniffing
+// then we will use an io.TeeReader, and if we're not sniffing anymore, then
+// we just use the source itself, and reset the internal buffer.
+// Basically, this starts the whole read over again from the recorded beginning.
 func (s *bufferedReader) reset(snif bool) {
+	// use a direct []byte array because there's some overhead in bytes.Buffer
+	// to support unreading, and other things we don't need or want.
+	// benchmarking suggested it was statistically significant overhead.
 	s.off = 0
 	s.rbuf = s.buf.Bytes()
 
@@ -59,6 +68,7 @@ func (s *bufferedReader) reset(snif bool) {
 	}
 
 	if s.src == nil {
+		// we do use bytes.Buffer.Write though, because it's very optimized.
 		s.src = io.TeeReader(s.source, &s.buf)
 	}
 }
