@@ -20,44 +20,55 @@ import (
 )
 
 // bufferedReader is an optimized implementation of io.Reader that behaves like
-// ```
-// io.MultiReader(bytes.NewReader(buffer.Bytes()), io.TeeReader(source, buffer))
-// ```
-// without allocating.
+//	io.MultiReader(bytes.NewReader(buffer.Bytes()), io.TeeReader(source, buffer))
+// Except it does not remove the bytes.Reader from the MultiReader when it hits EOF.
 type bufferedReader struct {
-	source     io.Reader
-	buffer     bytes.Buffer
-	bufferRead int
-	bufferSize int
-	sniffing   bool
-	lastErr    error
+	buffer    bytes.Buffer
+	snif, src io.Reader
+	lastErr   error
 }
 
-func (s *bufferedReader) Read(p []byte) (int, error) {
-	if s.bufferSize > s.bufferRead {
+func newBufferedReader(r io.Reader, snif bool) *bufferedReader {
+	s := &bufferedReader{
+		src: r,
+	}
+	
+	s.reset(snif)
+	
+	return s
+}
+
+func (s *bufferedReader) Read(p []byte) (n int, err error) {
+	if s.buffer.Len() > 0 {
 		// If we have already read something from the buffer before, we return the
 		// same data and the last error if any. We need to immediately return,
 		// otherwise we may block for ever, if we try to be smart and call
 		// source.Read() seeking a little bit of more data.
-		bn := copy(p, s.buffer.Bytes()[s.bufferRead:s.bufferSize])
-		s.bufferRead += bn
-		return bn, s.lastErr
+		
+		// (puellanivis) This behavior seems really weird, why is read data being
+		// returned twice, and not separate readers?
+		n, _ = s.buffer.Read(p)
+		
+	} else {
+		// If there is nothing more to return in the sniffed buffer, read from the
+		// source.
+		n, s.lastErr = s.snif.Read(p)
 	}
 
-	// If there is nothing more to return in the sniffed buffer, read from the
-	// source.
-	sn, sErr := s.source.Read(p)
-	if sn > 0 && s.sniffing {
-		s.lastErr = sErr
-		if wn, wErr := s.buffer.Write(p[:sn]); wErr != nil {
-			return wn, wErr
-		}
-	}
-	return sn, sErr
+	return n, s.lastErr
 }
 
-func (s *bufferedReader) reset(snif bool) {
-	s.sniffing = snif
-	s.bufferRead = 0
-	s.bufferSize = s.buffer.Len()
+func (s *bufferedReader) Reset(snif bool) {
+	s.buffer.Reset()
+
+	if !snif {
+		s.snif = s.src
+	}
+
+	if s.snif == s.src {
+		// this is a just in case.
+		// if a bufferedReader should never transition from snif==false to snif==true,
+		// then this whole if clause can just be removed.
+		s.snif = io.TeeReader(s.src, &s.buffer)
+	}
 }
