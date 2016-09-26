@@ -144,10 +144,14 @@ func matchHTTP2Field(w io.Writer, r io.Reader, name, value string) (matched bool
 		return false
 	}
 
+	done := false
 	framer := http2.NewFramer(w, r)
 	hdec := hpack.NewDecoder(uint32(4<<10), func(hf hpack.HeaderField) {
-		if hf.Name == name && hf.Value == value {
-			matched = true
+		if hf.Name == name {
+			done = true
+			if hf.Value == value {
+				matched = true
+			}
 		}
 	})
 	for {
@@ -161,17 +165,20 @@ func matchHTTP2Field(w io.Writer, r io.Reader, name, value string) (matched bool
 			if err := framer.WriteSettings(); err != nil {
 				return false
 			}
+		case *http2.ContinuationFrame:
+			if _, err := hdec.Write(f.HeaderBlockFragment()); err != nil {
+				return false
+			}
+			done = done || f.FrameHeader.Flags&http2.FlagHeadersEndHeaders != 0
 		case *http2.HeadersFrame:
 			if _, err := hdec.Write(f.HeaderBlockFragment()); err != nil {
 				return false
 			}
-			if matched {
-				return true
-			}
+			done = done || f.FrameHeader.Flags&http2.FlagHeadersEndHeaders != 0
+		}
 
-			if f.FrameHeader.Flags&http2.FlagHeadersEndHeaders != 0 {
-				return false
-			}
+		if done {
+			return matched
 		}
 	}
 }
