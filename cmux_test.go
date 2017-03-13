@@ -42,7 +42,7 @@ const (
 )
 
 func safeServe(errCh chan<- error, muxl CMux) {
-	if err := muxl.Serve(); !strings.Contains(err.Error(), "use of closed network connection") {
+	if err := muxl.Serve(); !strings.Contains(err.Error(), "use of closed") {
 		errCh <- err
 	}
 }
