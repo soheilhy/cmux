@@ -123,11 +123,23 @@ func HTTP2MatchHeaderFieldSendSettings(name, value string) MatchWriter {
 
 func hasHTTP2Preface(r io.Reader) bool {
 	var b [len(http2.ClientPreface)]byte
-	if _, err := io.ReadFull(r, b[:]); err != nil {
-		return false
-	}
+	last := 0
 
-	return string(b[:]) == http2.ClientPreface
+	for {
+		n, err := r.Read(b[last:])
+		if err != nil {
+			return false
+		}
+
+		last += n
+		eq := string(b[:last]) == http2.ClientPreface[:last]
+		if last == len(http2.ClientPreface) {
+			return eq
+		}
+		if !eq {
+			return false
+		}
+	}
 }
 
 func matchHTTP1Field(r io.Reader, name, value string) (matched bool) {
