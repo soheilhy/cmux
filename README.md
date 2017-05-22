@@ -32,7 +32,7 @@ httpS := &http.Server{
 }
 
 trpcS := rpc.NewServer()
-s.Register(&ExampleRPCRcvr{})
+trpcS.Register(&ExampleRPCRcvr{})
 
 // Use the muxed listeners for your servers.
 go grpcS.Serve(grpcL)
