@@ -16,6 +16,7 @@ package cmux
 
 import (
 	"bufio"
+	"crypto/tls"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -37,6 +38,11 @@ func PrefixMatcher(strs ...string) Matcher {
 	return pt.matchPrefix
 }
 
+func prefixByteMatcher(list ...[]byte) Matcher {
+	pt := newPatriciaTree(list...)
+	return pt.matchPrefix
+}
+
 var defaultHTTPMethods = []string{
 	"OPTIONS",
 	"GET",
@@ -55,6 +61,27 @@ var defaultHTTPMethods = []string{
 // matcher, use HTTP1 instead.
 func HTTP1Fast(extMethods ...string) Matcher {
 	return PrefixMatcher(append(defaultHTTPMethods, extMethods...)...)
+}
+
+// TLS matches HTTPS requests.
+//
+// By default, any TLS handshake packet is matched. An optional whitelist
+// of versions can be passed in to restrict the matcher, for example:
+//  TLS(tls.VersionTLS11, tls.VersionTLS12)
+func TLS(versions ...int) Matcher {
+	if len(versions) == 0 {
+		versions = []int{
+			tls.VersionSSL30,
+			tls.VersionTLS10,
+			tls.VersionTLS11,
+			tls.VersionTLS12,
+		}
+	}
+	prefixes := [][]byte{}
+	for _, v := range versions {
+		prefixes = append(prefixes, []byte{22, byte(v >> 8 & 0xff), byte(v & 0xff)})
+	}
+	return prefixByteMatcher(prefixes...)
 }
 
 const maxHTTPRead = 4096
