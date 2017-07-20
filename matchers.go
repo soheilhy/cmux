@@ -38,9 +38,7 @@ func PrefixMatcher(strs ...string) Matcher {
 	return pt.matchPrefix
 }
 
-// PrefixByteMatcher returns a matcher that matches a connection if it
-// starts with any of the []byte in list.
-func PrefixByteMatcher(list ...[]byte) Matcher {
+func prefixByteMatcher(list ...[]byte) Matcher {
 	pt := newPatriciaTree(list...)
 	return pt.matchPrefix
 }
@@ -83,7 +81,7 @@ func TLS(versions ...int) Matcher {
 	for _, v := range versions {
 		prefixes = append(prefixes, []byte{22, byte(v >> 8 & 0xff), byte(v & 0xff)})
 	}
-	return PrefixByteMatcher(prefixes...)
+	return prefixByteMatcher(prefixes...)
 }
 
 const maxHTTPRead = 4096
