@@ -478,6 +478,20 @@ func TestHTTP2(t *testing.T) {
 }
 
 func TestHTTP2MatchHeaderField(t *testing.T) {
+	testHTTP2MatchHeaderField(t, HTTP2HeaderField, "value", "value", "anothervalue")
+}
+
+func TestHTTP2MatchHeaderFieldPrefix(t *testing.T) {
+	testHTTP2MatchHeaderField(t, HTTP2HeaderFieldPrefix, "application/grpc+proto", "application/grpc", "application/json")
+}
+
+func testHTTP2MatchHeaderField(
+	t *testing.T,
+	matcherConstructor func(string, string) Matcher,
+	headerValue string,
+	matchValue string,
+	notMatchValue string,
+) {
 	defer leakCheck(t)()
 	errCh := make(chan error)
 	defer func() {
@@ -488,7 +502,6 @@ func TestHTTP2MatchHeaderField(t *testing.T) {
 		}
 	}()
 	name := "name"
-	value := "value"
 	writer, reader := net.Pipe()
 	go func() {
 		if _, err := io.WriteString(writer, http2.ClientPreface); err != nil {
@@ -496,7 +509,7 @@ func TestHTTP2MatchHeaderField(t *testing.T) {
 		}
 		var buf bytes.Buffer
 		enc := hpack.NewEncoder(&buf)
-		if err := enc.WriteField(hpack.HeaderField{Name: name, Value: value}); err != nil {
+		if err := enc.WriteField(hpack.HeaderField{Name: name, Value: headerValue}); err != nil {
 			t.Fatal(err)
 		}
 		framer := http2.NewFramer(writer, nil)
@@ -524,9 +537,9 @@ func TestHTTP2MatchHeaderField(t *testing.T) {
 		return false
 	})
 	// Create a matcher that cannot match the response.
-	muxl.Match(HTTP2HeaderField(name, "another"+value))
+	muxl.Match(matcherConstructor(name, notMatchValue))
 	// Then match with the expected field.
-	h2l := muxl.Match(HTTP2HeaderField(name, value))
+	h2l := muxl.Match(matcherConstructor(name, matchValue))
 	go safeServe(errCh, muxl)
 	muxedConn, err := h2l.Accept()
 	close(l.connCh)

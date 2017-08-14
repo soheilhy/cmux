@@ -112,7 +112,7 @@ func Example() {
 
 	// We first match the connection against HTTP2 fields. If matched, the
 	// connection will be sent through the "grpcl" listener.
-	grpcl := m.Match(cmux.HTTP2HeaderField("content-type", "application/grpc"))
+	grpcl := m.Match(cmux.HTTP2HeaderFieldPrefix("content-type", "application/grpc"))
 	//Otherwise, we match it againts a websocket upgrade request.
 	wsl := m.Match(cmux.HTTP1HeaderField("Upgrade", "websocket"))
 
