@@ -253,7 +253,7 @@ func TestTimeout(t *testing.T) {
 	lis, Close := testListener(t)
 	defer Close()
 	result := make(chan int, 5)
-	testDuration := time.Millisecond * 100
+	testDuration := time.Millisecond * 500
 	m := New(lis)
 	m.SetReadTimeout(testDuration)
 	http1 := m.Match(HTTP1Fast())
