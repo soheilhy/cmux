@@ -659,7 +659,9 @@ func TestClose(t *testing.T) {
 		if err != ErrListenerClosed {
 			t.Fatal(err)
 		}
-		if _, err := c2.Read([]byte{}); err != io.ErrClosedPipe {
+		// The error is either io.ErrClosedPipe or net.OpError wrapping
+		// a net.pipeError depending on the go version.
+		if _, err := c2.Read([]byte{}); !strings.Contains(err.Error(), "closed") {
 			t.Fatalf("connection is not closed and is leaked: %v", err)
 		}
 	}
