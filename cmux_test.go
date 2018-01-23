@@ -622,6 +622,35 @@ func TestErrorHandler(t *testing.T) {
 	}
 }
 
+func TestMultipleMatchers(t *testing.T) {
+	defer leakCheck(t)()
+	errCh := make(chan error)
+	defer func() {
+		select {
+		case err := <-errCh:
+			t.Fatal(err)
+		default:
+		}
+	}()
+	l, cleanup := testListener(t)
+	defer cleanup()
+
+	matcher := func(r io.Reader) bool {
+		return true
+	}
+	unmatcher := func(r io.Reader) bool {
+		return false
+	}
+
+	muxl := New(l)
+	lis := muxl.Match(unmatcher, matcher, unmatcher)
+
+	go runTestHTTPServer(errCh, lis)
+	go safeServe(errCh, muxl)
+
+	runTestHTTP1Client(t, l.Addr())
+}
+
 func TestClose(t *testing.T) {
 	defer leakCheck(t)()
 	errCh := make(chan error)
