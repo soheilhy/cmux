@@ -199,7 +199,7 @@ func (m *cMux) serve(c net.Conn, donec <-chan struct{}, wg *sync.WaitGroup) {
 				}
 				select {
 				case sl.l.connc <- muc:
-				case <-m.donec:
+				case <-donec:
 					_ = c.Close()
 				}
 				return
