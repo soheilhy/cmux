@@ -15,6 +15,7 @@
 package cmux
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -60,6 +61,9 @@ func (e errListenerClosed) Timeout() bool   { return false }
 // ErrListenerClosed is returned from muxListener.Accept when the underlying
 // listener is closed.
 var ErrListenerClosed = errListenerClosed("mux: listener closed")
+
+// ErrServerClosed is returned from muxListener.Accept when mux server is closed.
+var ErrServerClosed = errors.New("mux: server closed")
 
 // for readability of readTimeout
 var noTimeout time.Duration
@@ -148,7 +152,7 @@ func (m *cMux) Serve() error {
 	var wg sync.WaitGroup
 
 	defer func() {
-		m.closeDoneChan()
+		m.closeDoneChans()
 		wg.Wait()
 
 		for _, sl := range m.sls {
@@ -161,14 +165,6 @@ func (m *cMux) Serve() error {
 	}()
 
 	for {
-		select {
-		case <-m.donec:
-			// cmux was closed with cmux.Close()
-			return nil
-		default:
-			// do nothing
-		}
-
 		c, err := m.root.Accept()
 		if err != nil {
 			if !m.handleErr(err) {
@@ -215,15 +211,23 @@ func (m *cMux) serve(c net.Conn, donec <-chan struct{}, wg *sync.WaitGroup) {
 }
 
 func (m *cMux) Close() {
-	m.closeDoneChan()
+	m.closeDoneChans()
 }
 
-func (m *cMux) closeDoneChan() {
+func (m *cMux) closeDoneChans() {
 	select {
 	case <-m.donec:
 		// Already closed. Don't close again
 	default:
 		close(m.donec)
+	}
+	for _, sl := range m.sls {
+		select {
+		case <-sl.l.donec:
+			// Already closed. Don't close again
+		default:
+			close(sl.l.donec)
+		}
 	}
 }
 
@@ -246,14 +250,22 @@ func (m *cMux) handleErr(err error) bool {
 type muxListener struct {
 	net.Listener
 	connc chan net.Conn
+	donec chan struct{}
 }
 
 func (l muxListener) Accept() (net.Conn, error) {
-	c, ok := <-l.connc
-	if !ok {
-		return nil, ErrListenerClosed
+	select {
+	case c, ok := <-l.connc:
+		if !ok {
+			return nil, ErrListenerClosed
+		}
+		return c, nil
+	case <-l.donec:
+		return nil, ErrServerClosed
+	default:
+		// do nothing
 	}
-	return c, nil
+	return nil, ErrServerClosed
 }
 
 // MuxConn wraps a net.Conn and provides transparent sniffing of connection data.
