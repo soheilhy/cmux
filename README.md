@@ -49,7 +49,7 @@ Take a look at [other examples in the GoDoc](http://godoc.org/github.com/soheilh
 * [GoDocs](https://godoc.org/github.com/soheilhy/cmux)
 
 ## Performance
-There is room for improvment but, since we are only matching
+There is room for improvement but, since we are only matching
 the very first bytes of a connection, the performance overheads on
 long-lived connections (i.e., RPCs and pipelined HTTP streams)
 is negligible.
