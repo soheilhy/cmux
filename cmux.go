@@ -114,9 +114,10 @@ type cMux struct {
 	root        net.Listener
 	bufLen      int
 	errh        ErrorHandler
-	donec       chan struct{}
 	sls         []matchersListener
 	readTimeout time.Duration
+	donec       chan struct{}
+	mu          sync.Mutex
 }
 
 func matchersToMatchWriters(matchers []Matcher) []MatchWriter {
@@ -139,6 +140,7 @@ func (m *cMux) MatchWithWriters(matchers ...MatchWriter) net.Listener {
 	ml := muxListener{
 		Listener: m.root,
 		connc:    make(chan net.Conn, m.bufLen),
+		donec:    make(chan struct{}),
 	}
 	m.sls = append(m.sls, matchersListener{ss: matchers, l: ml})
 	return ml
@@ -215,6 +217,9 @@ func (m *cMux) Close() {
 }
 
 func (m *cMux) closeDoneChans() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	select {
 	case <-m.donec:
 		// Already closed. Don't close again
@@ -262,10 +267,7 @@ func (l muxListener) Accept() (net.Conn, error) {
 		return c, nil
 	case <-l.donec:
 		return nil, ErrServerClosed
-	default:
-		// do nothing
 	}
-	return nil, ErrServerClosed
 }
 
 // MuxConn wraps a net.Conn and provides transparent sniffing of connection data.
