@@ -14,6 +14,7 @@
 
 package cmux_test
 
+/*
 import (
 	"fmt"
 	"io"
@@ -132,3 +133,4 @@ func Example() {
 		panic(err)
 	}
 }
+*/
