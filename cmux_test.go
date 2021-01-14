@@ -128,7 +128,7 @@ func runTestHTTPServer(errCh chan<- error, l net.Listener) {
 			mu.Unlock()
 		},
 	}
-	if err := s.Serve(l); err != ErrListenerClosed {
+	if err := s.Serve(l); err != ErrListenerClosed && err != ErrServerClosed {
 		errCh <- err
 	}
 }
@@ -218,7 +218,7 @@ func runTestRPCServer(errCh chan<- error, l net.Listener) {
 	for {
 		c, err := l.Accept()
 		if err != nil {
-			if err != ErrListenerClosed {
+			if err != ErrListenerClosed && err != ErrServerClosed {
 				errCh <- err
 			}
 			return
@@ -651,7 +651,7 @@ func TestMultipleMatchers(t *testing.T) {
 	runTestHTTP1Client(t, l.Addr())
 }
 
-func TestClose(t *testing.T) {
+func TestListenerClose(t *testing.T) {
 	defer leakCheck(t)()
 	errCh := make(chan error)
 	defer func() {
@@ -685,7 +685,7 @@ func TestClose(t *testing.T) {
 
 	// Second connection either goes through or it is closed.
 	if _, err := anyl.Accept(); err != nil {
-		if err != ErrListenerClosed {
+		if err != ErrListenerClosed && err != ErrServerClosed {
 			t.Fatal(err)
 		}
 		// The error is either io.ErrClosedPipe or net.OpError wrapping
@@ -693,6 +693,31 @@ func TestClose(t *testing.T) {
 		if _, err := c2.Read([]byte{}); !strings.Contains(err.Error(), "closed") {
 			t.Fatalf("connection is not closed and is leaked: %v", err)
 		}
+	}
+}
+
+func TestClose(t *testing.T) {
+	defer leakCheck(t)()
+	errCh := make(chan error)
+	defer func() {
+		select {
+		case err := <-errCh:
+			t.Fatal(err)
+		default:
+		}
+	}()
+	l, cleanup := testListener(t)
+	defer cleanup()
+
+	muxl := New(l)
+	anyl := muxl.Match(Any())
+
+	go safeServe(errCh, muxl)
+
+	muxl.Close()
+
+	if _, err := anyl.Accept(); err != ErrServerClosed {
+		t.Fatal(err)
 	}
 }
 
