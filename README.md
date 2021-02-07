@@ -68,9 +68,9 @@ when it's accepted. For example, one connection can be either gRPC or REST, but
 not both. That is, we assume that a client connection is either used for gRPC
 or REST.
 
-* *Java gRPC Clients*: Java gRPC client blocks until it receives a SETTINGS
-frame from the server. If you are using the Java client to connect to a cmux'ed
-gRPC server please match with writers:
+* *gRPC Clients*: Java gRPC client and Go gRPC client after release 1.18.0
+block until it receives a SETTINGS frame from the server. If you are using the
+gRPC client to connect to a cmux'ed gRPC server please match with writers:
 ```go
 grpcl := m.MatchWithWriters(cmux.HTTP2MatchHeaderFieldSendSettings("content-type", "application/grpc"))
 ```
