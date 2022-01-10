@@ -19,7 +19,8 @@ m := cmux.New(l)
 
 // Match connections in order:
 // First grpc, then HTTP, and otherwise Go RPC/TCP.
-grpcL := m.Match(cmux.HTTP2HeaderField("content-type", "application/grpc"))
+// cmux.HTTP2MatchHeaderFieldSendSettings ensures we can handle any gRPC client.
+grpcL := m.MatchWithWriters(cmux.HTTP2MatchHeaderFieldSendSettings("content-type", "application/grpc"))
 httpL := m.Match(cmux.HTTP1Fast())
 trpcL := m.Match(cmux.Any()) // Any means anything that is not yet matched.
 
@@ -67,13 +68,6 @@ would not be set in your handlers.
 when it's accepted. For example, one connection can be either gRPC or REST, but
 not both. That is, we assume that a client connection is either used for gRPC
 or REST.
-
-* *Java gRPC Clients*: Java gRPC client blocks until it receives a SETTINGS
-frame from the server. If you are using the Java client to connect to a cmux'ed
-gRPC server please match with writers:
-```go
-grpcl := m.MatchWithWriters(cmux.HTTP2MatchHeaderFieldSendSettings("content-type", "application/grpc"))
-```
 
 # Copyright and License
 Copyright 2016 The CMux Authors. All rights reserved.
