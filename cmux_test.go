@@ -47,7 +47,7 @@ const (
 )
 
 func safeServe(errCh chan<- error, muxl CMux) {
-	if err := muxl.Serve(); !strings.Contains(err.Error(), "use of closed") {
+	if err := muxl.Serve(); err != nil && !strings.Contains(err.Error(), "use of closed") {
 		errCh <- err
 	}
 }

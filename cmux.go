@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strings"
 	"sync"
 	"time"
 )
@@ -169,6 +170,14 @@ func (m *cMux) Serve() error {
 	for {
 		c, err := m.root.Accept()
 		if err != nil {
+			if strings.Contains(err.Error(), "use of closed network connection") {
+				select {
+				case <-m.donec: // error is expected
+					return nil
+				default:
+				}
+			}
+
 			if !m.handleErr(err) {
 				return err
 			}
