@@ -29,6 +29,7 @@ type bufferedReader struct {
 	buffer     bytes.Buffer
 	bufferRead int
 	bufferSize int
+	stagePoint int
 	sniffing   bool
 	lastErr    error
 }
@@ -64,4 +65,12 @@ func (s *bufferedReader) reset(snif bool) {
 	s.sniffing = snif
 	s.bufferRead = 0
 	s.bufferSize = s.buffer.Len()
+}
+
+func (s *bufferedReader) newStage() {
+	s.stagePoint = s.buffer.Len()
+}
+
+func (s *bufferedReader) discard() {
+	s.buffer.Truncate(s.stagePoint)
 }
