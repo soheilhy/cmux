@@ -187,6 +187,10 @@ func (m *cMux) serve(c net.Conn, donec <-chan struct{}, wg *sync.WaitGroup) {
 	if m.readTimeout > noTimeout {
 		_ = c.SetReadDeadline(time.Now().Add(m.readTimeout))
 	}
+	if err := muc.checkPrefix(); err != nil {
+		_ = c.Close()
+		return
+	}
 	for _, sl := range m.sls {
 		for _, s := range sl.ss {
 			matched := s(muc.Conn, muc.startSniffing())
