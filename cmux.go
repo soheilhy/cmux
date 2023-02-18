@@ -273,7 +273,9 @@ func (l muxListener) Accept() (net.Conn, error) {
 // MuxConn wraps a net.Conn and provides transparent sniffing of connection data.
 type MuxConn struct {
 	net.Conn
-	buf bufferedReader
+	buf     bufferedReader
+	dstAddr *net.TCPAddr
+	srcAddr *net.TCPAddr
 }
 
 func newMuxConn(c net.Conn) *MuxConn {
