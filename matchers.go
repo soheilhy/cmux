@@ -266,10 +266,12 @@ func matchHTTP2Field(w io.Writer, r io.Reader, name string, matches func(string)
 				waitAcks--
 				break
 			}
-			if err := framer.WriteSettings(); err != nil {
-				return false
+			if waitAcks <= 0 {
+				if err := framer.WriteSettings(); err != nil {
+					return false
+				}
+				waitAcks++
 			}
-			waitAcks++
 		case *http2.ContinuationFrame:
 			if _, err := hdec.Write(f.HeaderBlockFragment()); err != nil {
 				return false
@@ -282,7 +284,7 @@ func matchHTTP2Field(w io.Writer, r io.Reader, name string, matches func(string)
 			done = done || f.FrameHeader.Flags&http2.FlagHeadersEndHeaders != 0
 		}
 
-		if done && waitAcks == 0 {
+		if done && waitAcks <= 0 {
 			return matched
 		}
 	}
