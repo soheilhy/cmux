@@ -165,25 +165,40 @@ func HTTP2HeaderFieldPrefix(name, valuePrefix string) Matcher {
 	}
 }
 
+const http2SettingNoRFC7540PrioritiesSettingID http2.SettingID = 0x9
+
+// HTTP2SettingDisableRFC7540Priorities disables HTTP/2 RFC 7540 stream priority support.
+//
+// In the HTTP/2 specification (RFC 7540), each stream can have a priority and dependency.
+// Some servers or clients may not require stream prioritization, or may want to simplify
+// scheduling logic. Setting Val=1 disables priority processing (NO_RFC7540_PRIORITIES).
+//
+// Use this setting to prevent the HTTP/2 implementation from honoring stream priorities,
+// which can be useful when custom flow control or simplified server logic is desired.
+var HTTP2SettingDisableRFC7540Priorities = http2.Setting{
+	ID:  http2SettingNoRFC7540PrioritiesSettingID,
+	Val: 1,
+}
+
 // HTTP2MatchHeaderFieldSendSettings matches the header field and writes the
 // settings to the server. Prefer HTTP2HeaderField over this one, if the client
 // does not block on receiving a SETTING frame.
-func HTTP2MatchHeaderFieldSendSettings(name, value string) MatchWriter {
+func HTTP2MatchHeaderFieldSendSettings(name, value string, settings ...http2.Setting) MatchWriter {
 	return func(w io.Writer, r io.Reader) bool {
 		return matchHTTP2Field(w, r, name, func(gotValue string) bool {
 			return gotValue == value
-		})
+		}, settings...)
 	}
 }
 
 // HTTP2MatchHeaderFieldPrefixSendSettings matches the header field prefix
 // and writes the settings to the server. Prefer HTTP2HeaderFieldPrefix over
 // this one, if the client does not block on receiving a SETTING frame.
-func HTTP2MatchHeaderFieldPrefixSendSettings(name, valuePrefix string) MatchWriter {
+func HTTP2MatchHeaderFieldPrefixSendSettings(name, valuePrefix string, settings ...http2.Setting) MatchWriter {
 	return func(w io.Writer, r io.Reader) bool {
 		return matchHTTP2Field(w, r, name, func(gotValue string) bool {
 			return strings.HasPrefix(gotValue, valuePrefix)
-		})
+		}, settings...)
 	}
 }
 
@@ -217,11 +232,28 @@ func matchHTTP1Field(r io.Reader, name string, matches func(string) bool) (match
 	return matches(req.Header.Get(name))
 }
 
-func matchHTTP2Field(w io.Writer, r io.Reader, name string, matches func(string) bool) (matched bool) {
+type stageReader interface {
+	io.Reader
+	newStage()
+	discard()
+}
+
+type nonStageReader struct{ io.Reader }
+
+func (nonStageReader) newStage() {}
+func (nonStageReader) discard()  {}
+
+func matchHTTP2Field(w io.Writer, r io.Reader, name string, matches func(string) bool, settings ...http2.Setting) (matched bool) {
 	if !hasHTTP2Preface(r) {
 		return false
 	}
 
+	sr := (stageReader)(nil)
+	if sr, _ = r.(stageReader); sr == nil {
+		sr = nonStageReader{}
+	}
+
+	waitAcks := 0
 	done := false
 	framer := http2.NewFramer(w, r)
 	hdec := hpack.NewDecoder(uint32(4<<10), func(hf hpack.HeaderField) {
@@ -233,6 +265,7 @@ func matchHTTP2Field(w io.Writer, r io.Reader, name string, matches func(string)
 		}
 	})
 	for {
+		sr.newStage()
 		f, err := framer.ReadFrame()
 		if err != nil {
 			return false
@@ -243,10 +276,16 @@ func matchHTTP2Field(w io.Writer, r io.Reader, name string, matches func(string)
 			// Sender acknoweldged the SETTINGS frame. No need to write
 			// SETTINGS again.
 			if f.IsAck() {
+				// Avoid causing golang.org/x/net/http2.serverConn.unackedSettings PROTOCOL_ERROR
+				sr.discard()
+				waitAcks--
 				break
 			}
-			if err := framer.WriteSettings(); err != nil {
-				return false
+			if waitAcks <= 0 {
+				if err := framer.WriteSettings(settings...); err != nil {
+					return false
+				}
+				waitAcks++
 			}
 		case *http2.ContinuationFrame:
 			if _, err := hdec.Write(f.HeaderBlockFragment()); err != nil {
@@ -260,7 +299,7 @@ func matchHTTP2Field(w io.Writer, r io.Reader, name string, matches func(string)
 			done = done || f.FrameHeader.Flags&http2.FlagHeadersEndHeaders != 0
 		}
 
-		if done {
+		if done && waitAcks <= 0 {
 			return matched
 		}
 	}

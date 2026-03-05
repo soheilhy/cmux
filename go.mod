@@ -1,5 +1,7 @@
 module github.com/soheilhy/cmux
 
-go 1.11
+go 1.18
 
-require golang.org/x/net v0.0.0-20201202161906-c7110b5ffcbb
+require golang.org/x/net v0.0.0-20220927171203-f486391704dc
+
+require golang.org/x/text v0.3.7 // indirect
