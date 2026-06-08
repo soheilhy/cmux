@@ -15,6 +15,7 @@
 package cmux_test
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log"
@@ -25,7 +26,6 @@ import (
 
 	"google.golang.org/grpc"
 
-	"golang.org/x/net/context"
 	"golang.org/x/net/websocket"
 
 	"github.com/soheilhy/cmux"

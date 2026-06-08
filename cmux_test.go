@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"go/build"
 	"io"
-	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
@@ -194,7 +193,7 @@ func runTestHTTPClient(t *testing.T, proto string, addr net.Addr) {
 		}
 	}()
 
-	b, err := ioutil.ReadAll(r.Body)
+	b, err := io.ReadAll(r.Body)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -321,7 +320,7 @@ func TestTimeout(t *testing.T) {
 
 func TestRead(t *testing.T) {
 	defer leakCheck(t)()
-	errCh := make(chan error)
+	errCh := make(chan error, 1)
 	defer func() {
 		select {
 		case err := <-errCh:
@@ -335,10 +334,11 @@ func TestRead(t *testing.T) {
 	writer, reader := net.Pipe()
 	go func() {
 		if _, err := io.WriteString(writer, strings.Repeat(payload, mult)); err != nil {
-			t.Fatal(err)
+			errCh <- err
+			return
 		}
 		if err := writer.Close(); err != nil {
-			t.Fatal(err)
+			errCh <- err
 		}
 	}()
 
@@ -379,7 +379,7 @@ func TestRead(t *testing.T) {
 
 func TestAny(t *testing.T) {
 	defer leakCheck(t)()
-	errCh := make(chan error)
+	errCh := make(chan error, 1)
 	defer func() {
 		select {
 		case err := <-errCh:
@@ -403,7 +403,7 @@ func TestTLS(t *testing.T) {
 	generateTLSCert(t)
 	defer cleanupTLSCert(t)
 	defer leakCheck(t)()
-	errCh := make(chan error)
+	errCh := make(chan error, 1)
 	defer func() {
 		select {
 		case err := <-errCh:
@@ -428,7 +428,7 @@ func TestTLS(t *testing.T) {
 
 func TestHTTP2(t *testing.T) {
 	defer leakCheck(t)()
-	errCh := make(chan error)
+	errCh := make(chan error, 1)
 	defer func() {
 		select {
 		case err := <-errCh:
@@ -439,10 +439,11 @@ func TestHTTP2(t *testing.T) {
 	writer, reader := net.Pipe()
 	go func() {
 		if _, err := io.WriteString(writer, http2.ClientPreface); err != nil {
-			t.Fatal(err)
+			errCh <- err
+			return
 		}
 		if err := writer.Close(); err != nil {
-			t.Fatal(err)
+			errCh <- err
 		}
 	}()
 
@@ -493,7 +494,7 @@ func testHTTP2MatchHeaderField(
 	notMatchValue string,
 ) {
 	defer leakCheck(t)()
-	errCh := make(chan error)
+	errCh := make(chan error, 1)
 	defer func() {
 		select {
 		case err := <-errCh:
@@ -505,12 +506,14 @@ func testHTTP2MatchHeaderField(
 	writer, reader := net.Pipe()
 	go func() {
 		if _, err := io.WriteString(writer, http2.ClientPreface); err != nil {
-			t.Fatal(err)
+			errCh <- err
+			return
 		}
 		var buf bytes.Buffer
 		enc := hpack.NewEncoder(&buf)
 		if err := enc.WriteField(hpack.HeaderField{Name: name, Value: headerValue}); err != nil {
-			t.Fatal(err)
+			errCh <- err
+			return
 		}
 		framer := http2.NewFramer(writer, nil)
 		err := framer.WriteHeaders(http2.HeadersFrameParam{
@@ -520,10 +523,11 @@ func testHTTP2MatchHeaderField(
 			EndHeaders:    true,
 		})
 		if err != nil {
-			t.Fatal(err)
+			errCh <- err
+			return
 		}
 		if err := writer.Close(); err != nil {
-			t.Fatal(err)
+			errCh <- err
 		}
 	}()
 
@@ -558,7 +562,7 @@ func testHTTP2MatchHeaderField(
 
 func TestHTTPGoRPC(t *testing.T) {
 	defer leakCheck(t)()
-	errCh := make(chan error)
+	errCh := make(chan error, 1)
 	defer func() {
 		select {
 		case err := <-errCh:
@@ -583,7 +587,7 @@ func TestHTTPGoRPC(t *testing.T) {
 
 func TestErrorHandler(t *testing.T) {
 	defer leakCheck(t)()
-	errCh := make(chan error)
+	errCh := make(chan error, 1)
 	defer func() {
 		select {
 		case err := <-errCh:
@@ -624,7 +628,7 @@ func TestErrorHandler(t *testing.T) {
 
 func TestMultipleMatchers(t *testing.T) {
 	defer leakCheck(t)()
-	errCh := make(chan error)
+	errCh := make(chan error, 1)
 	defer func() {
 		select {
 		case err := <-errCh:
@@ -653,7 +657,7 @@ func TestMultipleMatchers(t *testing.T) {
 
 func TestListenerClose(t *testing.T) {
 	defer leakCheck(t)()
-	errCh := make(chan error)
+	errCh := make(chan error, 1)
 	defer func() {
 		select {
 		case err := <-errCh:
@@ -698,7 +702,7 @@ func TestListenerClose(t *testing.T) {
 
 func TestClose(t *testing.T) {
 	defer leakCheck(t)()
-	errCh := make(chan error)
+	errCh := make(chan error, 1)
 	defer func() {
 		select {
 		case err := <-errCh:
