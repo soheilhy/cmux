@@ -86,17 +86,28 @@ func TLS(versions ...int) Matcher {
 
 const maxHTTPRead = 4096
 
+var httpMethodByte = map[byte]struct{}{'G': {}, 'P': {}, 'H': {}, 'D': {}, 'C': {}, 'O': {}, 'T': {}}
+
 // HTTP1 parses the first line or upto 4096 bytes of the request to see if
 // the conection contains an HTTP request.
 func HTTP1() Matcher {
 	return func(r io.Reader) bool {
 		br := bufio.NewReader(&io.LimitedReader{R: r, N: maxHTTPRead})
+		firstByte, err := br.ReadByte()
+		if err != nil {
+			return false
+		}
+		_, ok := httpMethodByte[firstByte]
+		if !ok {
+			return false
+		}
+
 		l, part, err := br.ReadLine()
 		if err != nil || part {
 			return false
 		}
 
-		_, _, proto, ok := parseRequestLine(string(l))
+		_, _, proto, ok := parseRequestLine(string(firstByte) + string(l))
 		if !ok {
 			return false
 		}
