@@ -71,7 +71,6 @@ func HTTP1Fast(extMethods ...string) Matcher {
 func TLS(versions ...int) Matcher {
 	if len(versions) == 0 {
 		versions = []int{
-			tls.VersionSSL30,
 			tls.VersionTLS10,
 			tls.VersionTLS11,
 			tls.VersionTLS12,
