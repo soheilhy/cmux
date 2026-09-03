@@ -43,6 +43,16 @@ func testPTree(t *testing.T, strs ...string) {
 	}
 }
 
+func TestHTTP1FastMatchesPATCH(t *testing.T) {
+	m := HTTP1Fast()
+	if !m(strings.NewReader("PATCH /x HTTP/1.1\r\n")) {
+		t.Fatal("HTTP1Fast should match PATCH")
+	}
+	if m(strings.NewReader("FOO /x HTTP/1.1\r\n")) {
+		t.Fatal("HTTP1Fast should not match FOO")
+	}
+}
+
 func TestPatriciaOnePrefix(t *testing.T) {
 	testPTree(t, "prefix")
 }

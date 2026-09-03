@@ -48,6 +48,7 @@ var defaultHTTPMethods = []string{
 	"HEAD",
 	"POST",
 	"PUT",
+	"PATCH",
 	"DELETE",
 	"TRACE",
 	"CONNECT",
