@@ -700,6 +700,51 @@ func TestListenerClose(t *testing.T) {
 	}
 }
 
+func TestListenerCloseUnblocksPendingMatch(t *testing.T) {
+	defer leakCheck(t)()
+
+	lis, cleanup := testListener(t)
+	defer cleanup()
+
+	muxl := New(lis)
+	matching := make(chan struct{})
+	muxl.Match(func(r io.Reader) bool {
+		close(matching)
+		var b [1]byte
+		_, _ = r.Read(b[:])
+		return false
+	})
+
+	serveErr := make(chan error, 1)
+	go func() {
+		serveErr <- muxl.Serve()
+	}()
+
+	conn, err := net.Dial("tcp", lis.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+
+	select {
+	case <-matching:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for connection matching to start")
+	}
+
+	cleanup()
+
+	select {
+	case err := <-serveErr:
+		if err == nil {
+			t.Fatal("Serve returned nil after listener close")
+		}
+	case <-time.After(time.Second):
+		_ = conn.Close()
+		t.Fatal("Serve did not return while a connection was pending matching")
+	}
+}
+
 func TestClose(t *testing.T) {
 	defer leakCheck(t)()
 	errCh := make(chan error, 1)
