@@ -76,6 +76,7 @@ func New(l net.Listener) CMux {
 		errh:        func(_ error) bool { return true },
 		donec:       make(chan struct{}),
 		readTimeout: noTimeout,
+		conns:       make(map[net.Conn]struct{}),
 	}
 }
 
@@ -118,6 +119,7 @@ type cMux struct {
 	readTimeout time.Duration
 	donec       chan struct{}
 	mu          sync.Mutex
+	conns       map[net.Conn]struct{}
 }
 
 func matchersToMatchWriters(matchers []Matcher) []MatchWriter {
@@ -155,6 +157,7 @@ func (m *cMux) Serve() error {
 
 	defer func() {
 		m.closeDoneChans()
+		m.closePendingConns()
 		wg.Wait()
 
 		for _, sl := range m.sls {
@@ -175,6 +178,7 @@ func (m *cMux) Serve() error {
 			continue
 		}
 
+		m.trackConn(c)
 		wg.Add(1)
 		go m.serve(c, m.donec, &wg)
 	}
@@ -182,6 +186,7 @@ func (m *cMux) Serve() error {
 
 func (m *cMux) serve(c net.Conn, donec <-chan struct{}, wg *sync.WaitGroup) {
 	defer wg.Done()
+	defer m.untrackConn(c)
 
 	muc := newMuxConn(c)
 	if m.readTimeout > noTimeout {
@@ -214,6 +219,33 @@ func (m *cMux) serve(c net.Conn, donec <-chan struct{}, wg *sync.WaitGroup) {
 
 func (m *cMux) Close() {
 	m.closeDoneChans()
+	m.closePendingConns()
+}
+
+func (m *cMux) trackConn(c net.Conn) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.conns[c] = struct{}{}
+}
+
+func (m *cMux) untrackConn(c net.Conn) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.conns, c)
+}
+
+func (m *cMux) closePendingConns() {
+	m.mu.Lock()
+	conns := make([]net.Conn, 0, len(m.conns))
+	for c := range m.conns {
+		conns = append(conns, c)
+		delete(m.conns, c)
+	}
+	m.mu.Unlock()
+
+	for _, c := range conns {
+		_ = c.Close()
+	}
 }
 
 func (m *cMux) closeDoneChans() {
